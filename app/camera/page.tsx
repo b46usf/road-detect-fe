@@ -30,11 +30,42 @@ function mapCameraError(error: unknown): string {
 
 export default function CameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const mountedRef = useRef(false)
 
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<CameraStatus>("starting")
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
+  const [lastSnapshotAt, setLastSnapshotAt] = useState<Date | null>(null)
+
+  const captureFrame = useCallback(() => {
+    const video = videoRef.current
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      return
+    }
+
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return
+    }
+
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas")
+    }
+
+    const canvas = canvasRef.current
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    const context = canvas.getContext("2d")
+    if (!context) {
+      return
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    setSnapshotUrl(canvas.toDataURL("image/jpeg", 0.8))
+    setLastSnapshotAt(new Date())
+  }, [])
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -50,6 +81,8 @@ export default function CameraPage() {
   const startCamera = useCallback(async () => {
     setStatus("starting")
     setError(null)
+    setSnapshotUrl(null)
+    setLastSnapshotAt(null)
     stopCamera()
 
     if (!window.isSecureContext) {
@@ -115,6 +148,31 @@ export default function CameraPage() {
     setStatus("idle")
   }, [stopCamera])
 
+  const handleDownloadSnapshot = useCallback(() => {
+    if (!snapshotUrl) {
+      return
+    }
+
+    const captureTime = lastSnapshotAt ?? new Date()
+    const datePart = [
+      captureTime.getFullYear(),
+      String(captureTime.getMonth() + 1).padStart(2, "0"),
+      String(captureTime.getDate()).padStart(2, "0")
+    ].join("")
+    const timePart = [
+      String(captureTime.getHours()).padStart(2, "0"),
+      String(captureTime.getMinutes()).padStart(2, "0"),
+      String(captureTime.getSeconds()).padStart(2, "0")
+    ].join("")
+
+    const anchor = document.createElement("a")
+    anchor.href = snapshotUrl
+    anchor.download = `snapshot-jalan-${datePart}-${timePart}.jpg`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+  }, [lastSnapshotAt, snapshotUrl])
+
   useEffect(() => {
     mountedRef.current = true
     startCamera()
@@ -124,6 +182,19 @@ export default function CameraPage() {
       stopCamera()
     }
   }, [startCamera, stopCamera])
+
+  useEffect(() => {
+    if (status !== "active") {
+      return
+    }
+
+    captureFrame()
+    const intervalId = window.setInterval(captureFrame, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [captureFrame, status])
 
   const statusTone =
     status === "active"
@@ -215,6 +286,46 @@ export default function CameraPage() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold sm:text-base">Snapshot Frame</h2>
+              <span className="text-xs text-slate-400">Auto update ~1 detik</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadSnapshot}
+              disabled={!snapshotUrl}
+              className="rounded-lg bg-emerald-300 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-slate-700"
+            >
+              Simpan Snapshot
+            </button>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/60">
+            <div className="relative aspect-[16/9] w-full">
+              {snapshotUrl ? (
+                <img
+                  src={snapshotUrl}
+                  alt="Snapshot frame dari video kamera"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="grid h-full place-items-center p-4 text-sm text-slate-400">
+                  Menunggu frame dari kamera...
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-slate-400">
+            {lastSnapshotAt
+              ? `Update terakhir: ${lastSnapshotAt.toLocaleTimeString("id-ID")}`
+              : "Snapshot akan tampil setelah video aktif."}
+          </p>
         </div>
 
         <footer className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
