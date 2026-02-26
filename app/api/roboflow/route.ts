@@ -130,6 +130,106 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : ""
 }
 
+function splitModelIdSegments(rawModelId: string): string[] {
+  const normalized = rawModelId
+    .trim()
+    .replace(/^https?:\/\/detect\.roboflow\.com\//i, "")
+    .replace(/^\/+|\/+$/g, "")
+
+  if (!normalized) {
+    return []
+  }
+
+  return normalized
+    .split("/")
+    .map((segment) => {
+      const cleaned = segment.trim()
+      if (!cleaned) {
+        return ""
+      }
+
+      try {
+        return decodeURIComponent(cleaned).trim()
+      } catch {
+        return cleaned
+      }
+    })
+    .filter((segment) => segment.length > 0)
+}
+
+function buildRoboflowPath(
+  modelId: string,
+  modelVersion: string
+): { path: string; normalizedModelId: string } | null {
+  const normalizedVersion = modelVersion.trim()
+  if (!normalizedVersion) {
+    return null
+  }
+
+  const segments = splitModelIdSegments(modelId)
+  if (segments.length === 0) {
+    return null
+  }
+
+  const lastSegment = segments[segments.length - 1]
+  if (lastSegment === normalizedVersion) {
+    segments.pop()
+  }
+
+  if (segments.length === 0) {
+    return null
+  }
+
+  const encodedPath = [...segments.map((segment) => encodeURIComponent(segment)), encodeURIComponent(normalizedVersion)].join("/")
+  return {
+    path: encodedPath,
+    normalizedModelId: segments.join("/")
+  }
+}
+
+function extractUpstreamMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null
+  }
+
+  const source = payload as Record<string, unknown>
+
+  const candidates = [source.error, source.message, source.detail, source.reason]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim()
+    }
+  }
+
+  if (source.error && typeof source.error === "object") {
+    const errorObject = source.error as Record<string, unknown>
+    const message =
+      (typeof errorObject.message === "string" && errorObject.message.trim()) ||
+      (typeof errorObject.error === "string" && errorObject.error.trim())
+    if (message) {
+      return message
+    }
+  }
+
+  if (Array.isArray(source.errors) && source.errors.length > 0) {
+    const first = source.errors[0]
+    if (typeof first === "string" && first.trim().length > 0) {
+      return first.trim()
+    }
+    if (first && typeof first === "object") {
+      const firstObject = first as Record<string, unknown>
+      const message =
+        (typeof firstObject.message === "string" && firstObject.message.trim()) ||
+        (typeof firstObject.error === "string" && firstObject.error.trim())
+      if (message) {
+        return message
+      }
+    }
+  }
+
+  return null
+}
+
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json(
     {

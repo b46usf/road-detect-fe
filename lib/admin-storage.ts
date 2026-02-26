@@ -5,11 +5,46 @@ export const ADMIN_SESSION_STORAGE_KEY = "road-detect:admin-session:v1"
 export const DETECTION_HISTORY_STORAGE_KEY = "road-detect:detection-history:v1"
 export const DETECTION_HISTORY_MAX_ITEMS = 120
 
+export const GIS_MAP_SETTINGS_STORAGE_KEY = "road-detect:gismap-settings:v1"
+export const GIS_INDONESIA_GEOJSON_STORAGE_KEY = "road-detect:gismap-indonesia:v1"
+export const GIS_WFS_GEOJSON_STORAGE_KEY = "road-detect:gismap-wfs:v1"
+
 export type StoredSeverityLevel = "ringan" | "sedang" | "berat" | "tidak-terdeteksi"
+export type GisCrs = "EPSG:3857" | "EPSG:4326"
 
 export interface AdminSession {
   username: string
   loggedInAt: string
+}
+
+export interface DetectionSpatialRecord {
+  sourceCrs: "EPSG:4326"
+  postgis: {
+    srid: 4326
+    wkt: string
+    ewkt: string
+    geojson: {
+      type: "Point"
+      coordinates: [number, number]
+    }
+  }
+  feature: {
+    type: "Feature"
+    geometry: {
+      type: "Point"
+      coordinates: [number, number]
+    }
+    properties: {
+      id: string
+      waktuDeteksi: string
+      createdAt: string
+      tingkatKerusakan: StoredSeverityLevel
+      luasanKerusakanPercent: number
+      dominantClass: string | null
+      modelId: string
+      modelVersion: string
+    }
+  }
 }
 
 export interface StoredDetectionRecord {
@@ -53,6 +88,41 @@ export interface StoredDetectionRecord {
     sourceHeight: number | null
     isFhdSource: boolean | null
   }
+  spatial: DetectionSpatialRecord | null
+}
+
+export interface GisMapSettings {
+  crs: GisCrs
+  showDetectionPoints: boolean
+  showIndonesiaBoundary: boolean
+  indonesiaGeoJsonUrl: string
+  wmsEnabled: boolean
+  wmsUrl: string
+  wmsLayers: string
+  wmsFormat: string
+  wmsTransparent: boolean
+  wfsEnabled: boolean
+  wfsUrl: string
+}
+
+export interface GeoJsonCacheEntry {
+  sourceUrl: string
+  fetchedAt: string
+  data: unknown
+}
+
+const DEFAULT_GIS_MAP_SETTINGS: GisMapSettings = {
+  crs: "EPSG:3857",
+  showDetectionPoints: true,
+  showIndonesiaBoundary: true,
+  indonesiaGeoJsonUrl: "/geo/indonesia-simplified.geojson",
+  wmsEnabled: false,
+  wmsUrl: "",
+  wmsLayers: "",
+  wmsFormat: "image/png",
+  wmsTransparent: true,
+  wfsEnabled: false,
+  wfsUrl: ""
 }
 
 function parseJson<T>(value: string | null, fallback: T): T {
@@ -65,6 +135,154 @@ function parseJson<T>(value: string | null, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+function readString(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") {
+    return fallback
+  }
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : fallback
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
+function normalizeSeverity(value: unknown): StoredSeverityLevel {
+  if (value === "ringan" || value === "sedang" || value === "berat") {
+    return value
+  }
+
+  return "tidak-terdeteksi"
+}
+
+function normalizeDetectionLocation(
+  value: unknown
+): StoredDetectionRecord["lokasi"] {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+  const latitude = toFiniteNumber(source.latitude)
+  const longitude = toFiniteNumber(source.longitude)
+  if (latitude === null || longitude === null) {
+    return null
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null
+  }
+
+  return {
+    latitude,
+    longitude,
+    accuracy: toFiniteNumber(source.accuracy),
+    timestamp: typeof source.timestamp === "string" ? source.timestamp : null,
+    source: readString(source.source, "gps")
+  }
+}
+
+function formatCoordinate(value: number): string {
+  return value.toFixed(8)
+}
+
+export function createSpatialRecord(params: {
+  id: string
+  createdAt: string
+  waktuDeteksi: string
+  tingkatKerusakan: StoredSeverityLevel
+  luasanKerusakanPercent: number
+  dominantClass: string | null
+  modelId: string
+  modelVersion: string
+  lokasi: StoredDetectionRecord["lokasi"]
+}): DetectionSpatialRecord | null {
+  const { lokasi } = params
+  if (!lokasi) {
+    return null
+  }
+
+  const latitude = toFiniteNumber(lokasi.latitude)
+  const longitude = toFiniteNumber(lokasi.longitude)
+  if (latitude === null || longitude === null) {
+    return null
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null
+  }
+
+  const lonText = formatCoordinate(longitude)
+  const latText = formatCoordinate(latitude)
+  const wkt = `POINT(${lonText} ${latText})`
+
+  return {
+    sourceCrs: "EPSG:4326",
+    postgis: {
+      srid: 4326,
+      wkt,
+      ewkt: `SRID=4326;${wkt}`,
+      geojson: {
+        type: "Point",
+        coordinates: [longitude, latitude]
+      }
+    },
+    feature: {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [longitude, latitude]
+      },
+      properties: {
+        id: params.id,
+        waktuDeteksi: params.waktuDeteksi,
+        createdAt: params.createdAt,
+        tingkatKerusakan: params.tingkatKerusakan,
+        luasanKerusakanPercent: params.luasanKerusakanPercent,
+        dominantClass: params.dominantClass,
+        modelId: params.modelId,
+        modelVersion: params.modelVersion
+      }
+    }
+  }
+}
+
+function isSpatialRecord(value: unknown): value is DetectionSpatialRecord {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const source = value as Record<string, unknown>
+  if (source.sourceCrs !== "EPSG:4326") {
+    return false
+  }
+
+  const postgis = source.postgis
+  if (!postgis || typeof postgis !== "object") {
+    return false
+  }
+
+  const postgisObject = postgis as Record<string, unknown>
+  if (postgisObject.srid !== 4326) {
+    return false
+  }
+
+  if (typeof postgisObject.ewkt !== "string" || postgisObject.ewkt.trim().length === 0) {
+    return false
+  }
+
+  return true
 }
 
 export function validateAdminCredentials(username: string, password: string): boolean {
@@ -115,14 +333,111 @@ export function clearAdminSession(): void {
   window.localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
 }
 
+function normalizeRecord(
+  value: unknown,
+  index: number
+): StoredDetectionRecord | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+
+  const id = readString(source.id, `${Date.now()}-${index}`)
+  const createdAt = readString(source.createdAt, new Date().toISOString())
+  const modelId = readString(source.modelId, "unknown-model")
+  const modelVersion = readString(source.modelVersion, "unknown")
+  const apiMessage = readString(source.apiMessage, "Deteksi berhasil diproses.")
+  const apiDurationMs = toFiniteNumber(source.apiDurationMs)
+  const luasanKerusakanPercent = Math.max(0, toFiniteNumber(source.luasanKerusakanPercent) ?? 0)
+  const tingkatKerusakan = normalizeSeverity(source.tingkatKerusakan)
+  const totalDeteksi = Math.max(0, toFiniteNumber(source.totalDeteksi) ?? 0)
+  const dominantClass = readString(source.dominantClass, "") || null
+  const lokasi = normalizeDetectionLocation(source.lokasi)
+  const waktuDeteksi = readString(source.waktuDeteksi, createdAt)
+
+  const classCountsRaw =
+    source.classCounts && typeof source.classCounts === "object"
+      ? (source.classCounts as Record<string, unknown>)
+      : {}
+
+  const classDistributionRaw =
+    source.classDistribution && typeof source.classDistribution === "object"
+      ? (source.classDistribution as Record<string, unknown>)
+      : {}
+
+  const visualRaw =
+    source.visualBukti && typeof source.visualBukti === "object"
+      ? (source.visualBukti as Record<string, unknown>)
+      : {}
+
+  const spatialInput = source.spatial
+  const fallbackSpatial = createSpatialRecord({
+    id,
+    createdAt,
+    waktuDeteksi,
+    tingkatKerusakan,
+    luasanKerusakanPercent,
+    dominantClass,
+    modelId,
+    modelVersion,
+    lokasi
+  })
+
+  return {
+    id,
+    createdAt,
+    modelId,
+    modelVersion,
+    apiMessage,
+    apiDurationMs,
+    luasanKerusakanPercent,
+    tingkatKerusakan,
+    totalDeteksi,
+    dominantClass,
+    classCounts: {
+      pothole: Math.max(0, toFiniteNumber(classCountsRaw.pothole) ?? 0),
+      crack: Math.max(0, toFiniteNumber(classCountsRaw.crack) ?? 0),
+      rutting: Math.max(0, toFiniteNumber(classCountsRaw.rutting) ?? 0),
+      lainnya: Math.max(0, toFiniteNumber(classCountsRaw.lainnya) ?? 0),
+      totalDeteksi: Math.max(0, toFiniteNumber(classCountsRaw.totalDeteksi) ?? totalDeteksi)
+    },
+    classDistribution: {
+      pothole: Math.max(0, toFiniteNumber(classDistributionRaw.pothole) ?? 0),
+      crack: Math.max(0, toFiniteNumber(classDistributionRaw.crack) ?? 0),
+      rutting: Math.max(0, toFiniteNumber(classDistributionRaw.rutting) ?? 0),
+      lainnya: Math.max(0, toFiniteNumber(classDistributionRaw.lainnya) ?? 0)
+    },
+    lokasi,
+    waktuDeteksi,
+    visualBukti: {
+      mime: readString(visualRaw.mime, "image/jpeg"),
+      quality: toFiniteNumber(visualRaw.quality),
+      captureWidth: toFiniteNumber(visualRaw.captureWidth),
+      captureHeight: toFiniteNumber(visualRaw.captureHeight),
+      sourceWidth: toFiniteNumber(visualRaw.sourceWidth),
+      sourceHeight: toFiniteNumber(visualRaw.sourceHeight),
+      isFhdSource: typeof visualRaw.isFhdSource === "boolean" ? visualRaw.isFhdSource : null
+    },
+    spatial: isSpatialRecord(spatialInput) ? spatialInput : fallbackSpatial
+  }
+}
+
 export function readDetectionHistory(): StoredDetectionRecord[] {
   if (typeof window === "undefined") {
     return []
   }
 
   const raw = window.localStorage.getItem(DETECTION_HISTORY_STORAGE_KEY)
-  const parsed = parseJson<StoredDetectionRecord[]>(raw, [])
-  return Array.isArray(parsed) ? parsed : []
+  const parsed = parseJson<unknown>(raw, [])
+  if (!Array.isArray(parsed)) {
+    return []
+  }
+
+  return parsed
+    .map((item, index) => normalizeRecord(item, index))
+    .filter((item): item is StoredDetectionRecord => item !== null)
+    .slice(0, DETECTION_HISTORY_MAX_ITEMS)
 }
 
 export function appendDetectionHistory(
@@ -133,8 +448,25 @@ export function appendDetectionHistory(
   }
 
   try {
+    const normalizedRecord: StoredDetectionRecord = {
+      ...record,
+      spatial:
+        record.spatial ??
+        createSpatialRecord({
+          id: record.id,
+          createdAt: record.createdAt,
+          waktuDeteksi: record.waktuDeteksi,
+          tingkatKerusakan: record.tingkatKerusakan,
+          luasanKerusakanPercent: record.luasanKerusakanPercent,
+          dominantClass: record.dominantClass,
+          modelId: record.modelId,
+          modelVersion: record.modelVersion,
+          lokasi: record.lokasi
+        })
+    }
+
     const current = readDetectionHistory()
-    const next = [record, ...current].slice(0, DETECTION_HISTORY_MAX_ITEMS)
+    const next = [normalizedRecord, ...current].slice(0, DETECTION_HISTORY_MAX_ITEMS)
     window.localStorage.setItem(DETECTION_HISTORY_STORAGE_KEY, JSON.stringify(next))
     return { ok: true, total: next.length }
   } catch (error) {
@@ -152,4 +484,125 @@ export function clearDetectionHistory(): void {
   }
 
   window.localStorage.removeItem(DETECTION_HISTORY_STORAGE_KEY)
+}
+
+export function getDefaultGisMapSettings(): GisMapSettings {
+  return {
+    ...DEFAULT_GIS_MAP_SETTINGS
+  }
+}
+
+export function readGisMapSettings(): GisMapSettings {
+  if (typeof window === "undefined") {
+    return getDefaultGisMapSettings()
+  }
+
+  const raw = window.localStorage.getItem(GIS_MAP_SETTINGS_STORAGE_KEY)
+  const parsed = parseJson<unknown>(raw, {})
+  const source = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}
+
+  return {
+    crs: source.crs === "EPSG:4326" ? "EPSG:4326" : "EPSG:3857",
+    showDetectionPoints:
+      typeof source.showDetectionPoints === "boolean"
+        ? source.showDetectionPoints
+        : DEFAULT_GIS_MAP_SETTINGS.showDetectionPoints,
+    showIndonesiaBoundary:
+      typeof source.showIndonesiaBoundary === "boolean"
+        ? source.showIndonesiaBoundary
+        : DEFAULT_GIS_MAP_SETTINGS.showIndonesiaBoundary,
+    indonesiaGeoJsonUrl: readString(source.indonesiaGeoJsonUrl, DEFAULT_GIS_MAP_SETTINGS.indonesiaGeoJsonUrl),
+    wmsEnabled:
+      typeof source.wmsEnabled === "boolean"
+        ? source.wmsEnabled
+        : DEFAULT_GIS_MAP_SETTINGS.wmsEnabled,
+    wmsUrl: readString(source.wmsUrl, DEFAULT_GIS_MAP_SETTINGS.wmsUrl),
+    wmsLayers: readString(source.wmsLayers, DEFAULT_GIS_MAP_SETTINGS.wmsLayers),
+    wmsFormat: readString(source.wmsFormat, DEFAULT_GIS_MAP_SETTINGS.wmsFormat),
+    wmsTransparent:
+      typeof source.wmsTransparent === "boolean"
+        ? source.wmsTransparent
+        : DEFAULT_GIS_MAP_SETTINGS.wmsTransparent,
+    wfsEnabled:
+      typeof source.wfsEnabled === "boolean"
+        ? source.wfsEnabled
+        : DEFAULT_GIS_MAP_SETTINGS.wfsEnabled,
+    wfsUrl: readString(source.wfsUrl, DEFAULT_GIS_MAP_SETTINGS.wfsUrl)
+  }
+}
+
+export function writeGisMapSettings(
+  settings: GisMapSettings
+): { ok: true } | { ok: false; message: string } {
+  if (typeof window === "undefined") {
+    return { ok: false, message: "localStorage tidak tersedia di server." }
+  }
+
+  try {
+    window.localStorage.setItem(GIS_MAP_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    return { ok: true }
+  } catch {
+    return { ok: false, message: "Gagal menyimpan konfigurasi GIS ke localStorage." }
+  }
+}
+
+function readGeoJsonCacheByKey(key: string): GeoJsonCacheEntry | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const raw = window.localStorage.getItem(key)
+  const parsed = parseJson<unknown>(raw, null)
+  if (!parsed || typeof parsed !== "object") {
+    return null
+  }
+
+  const source = parsed as Record<string, unknown>
+  const sourceUrl = readString(source.sourceUrl)
+  const fetchedAt = readString(source.fetchedAt)
+  if (!sourceUrl || !fetchedAt) {
+    return null
+  }
+
+  return {
+    sourceUrl,
+    fetchedAt,
+    data: source.data
+  }
+}
+
+function writeGeoJsonCacheByKey(
+  key: string,
+  payload: GeoJsonCacheEntry
+): { ok: true } | { ok: false; message: string } {
+  if (typeof window === "undefined") {
+    return { ok: false, message: "localStorage tidak tersedia di server." }
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(payload))
+    return { ok: true }
+  } catch {
+    return { ok: false, message: "Gagal menyimpan cache GeoJSON." }
+  }
+}
+
+export function readIndonesiaGeoJsonCache(): GeoJsonCacheEntry | null {
+  return readGeoJsonCacheByKey(GIS_INDONESIA_GEOJSON_STORAGE_KEY)
+}
+
+export function writeIndonesiaGeoJsonCache(
+  payload: GeoJsonCacheEntry
+): { ok: true } | { ok: false; message: string } {
+  return writeGeoJsonCacheByKey(GIS_INDONESIA_GEOJSON_STORAGE_KEY, payload)
+}
+
+export function readWfsGeoJsonCache(): GeoJsonCacheEntry | null {
+  return readGeoJsonCacheByKey(GIS_WFS_GEOJSON_STORAGE_KEY)
+}
+
+export function writeWfsGeoJsonCache(
+  payload: GeoJsonCacheEntry
+): { ok: true } | { ok: false; message: string } {
+  return writeGeoJsonCacheByKey(GIS_WFS_GEOJSON_STORAGE_KEY, payload)
 }

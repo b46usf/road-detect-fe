@@ -2,7 +2,11 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { appendDetectionHistory, type StoredDetectionRecord } from "@/lib/admin-storage"
+import {
+  appendDetectionHistory,
+  createSpatialRecord,
+  type StoredDetectionRecord
+} from "@/lib/admin-storage"
 
 type CameraStatus = "starting" | "active" | "idle" | "error"
 type SeverityLevel = "ringan" | "sedang" | "berat"
@@ -539,10 +543,22 @@ function buildHistoryRecord(params: {
   apiDurationMs: number | null
 }): StoredDetectionRecord {
   const { report, modelId, modelVersion, apiMessage, apiDurationMs } = params
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const createdAt = new Date().toISOString()
+  const location =
+    report.lokasi
+      ? {
+          latitude: report.lokasi.latitude,
+          longitude: report.lokasi.longitude,
+          accuracy: report.lokasi.accuracy,
+          timestamp: report.lokasi.timestamp,
+          source: report.lokasi.source
+        }
+      : null
 
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    createdAt: new Date().toISOString(),
+    id,
+    createdAt,
     modelId,
     modelVersion,
     apiMessage,
@@ -564,15 +580,7 @@ function buildHistoryRecord(params: {
       rutting: report.breakdownKelas.distribusiPersentase.rutting,
       lainnya: report.breakdownKelas.distribusiPersentase.lainnya
     },
-    lokasi: report.lokasi
-      ? {
-          latitude: report.lokasi.latitude,
-          longitude: report.lokasi.longitude,
-          accuracy: report.lokasi.accuracy,
-          timestamp: report.lokasi.timestamp,
-          source: report.lokasi.source
-        }
-      : null,
+    lokasi: location,
     waktuDeteksi: report.waktuDeteksi,
     visualBukti: {
       mime: report.visualBukti.mime,
@@ -582,7 +590,18 @@ function buildHistoryRecord(params: {
       sourceWidth: report.visualBukti.resolusiSource.width,
       sourceHeight: report.visualBukti.resolusiSource.height,
       isFhdSource: report.visualBukti.isFhdSource
-    }
+    },
+    spatial: createSpatialRecord({
+      id,
+      createdAt,
+      waktuDeteksi: report.waktuDeteksi,
+      tingkatKerusakan: report.tingkatKerusakan.dominan,
+      luasanKerusakanPercent: report.luasanKerusakan.totalPersentase,
+      dominantClass: report.breakdownKelas.dominanKelas,
+      modelId,
+      modelVersion,
+      lokasi: location
+    })
   }
 }
 

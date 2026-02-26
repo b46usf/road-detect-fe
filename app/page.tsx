@@ -48,7 +48,6 @@ export default function Home() {
             >
               Login Admin
             </Link>
-            <p className="text-sm text-slate-400">Gunakan HTTPS atau localhost agar izin kamera aktif.</p>
           </div>
         </div>
 
