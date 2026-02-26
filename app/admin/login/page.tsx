@@ -88,11 +88,6 @@ export default function AdminLoginPage() {
 
           {error && <p className="mt-3 text-xs text-rose-300">{error}</p>}
 
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/35 p-3 text-xs text-slate-300">
-            <p>User default: {ADMIN_DEFAULT_USERNAME}</p>
-            <p>Password default: {ADMIN_DEFAULT_PASSWORD}</p>
-          </div>
-
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href="/camera"
