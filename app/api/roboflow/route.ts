@@ -515,7 +515,7 @@ export async function POST(request: Request) {
     return jsonError(
       400,
       "INVALID_MODEL_PATH",
-      "Format `modelId` atau `modelVersion` tidak valid. Pastikan `modelId` menggunakan format 'workspace/model'."
+      "Format `modelId` atau `modelVersion` tidak valid. Gunakan nama model yang benar (mis. 'workspace/model' atau hanya 'model')."
     )
   }
 

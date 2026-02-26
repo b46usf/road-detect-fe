@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
               <input
                 value={gisDraft.wmsLayers}
                 onChange={(event) => updateGisDraft("wmsLayers", event.target.value)}
-                placeholder="workspace:layer_name"
+                placeholder="road-damage-ai atau workspace/model"
                 className="w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-300/70"
               />
             </label>
