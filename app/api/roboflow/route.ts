@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server"
+import {
+  ParsedPrediction,
+  SeverityLevel,
+  DominantSeverity,
+  normalizePredictions,
+  classifySeverity,
+  buildDamageSummary,
+} from "../../../lib/roboflow-utils"
+import { toFiniteNumber, readString, normalizeImageInput, extractMimeFromDataUrl, parseDetectedAt } from "../../../lib/common-utils"
 
 interface InferRequestBody {
   image?: unknown
@@ -17,26 +26,6 @@ interface RateLimitRecord {
   windowStart: number
   count: number
   lastRequestAt: number
-}
-
-type SeverityLevel = "ringan" | "sedang" | "berat"
-type DominantSeverity = SeverityLevel | "tidak-terdeteksi"
-
-interface ParsedPrediction {
-  label: string
-  width: number
-  height: number
-}
-
-interface ClassSummaryAccumulator {
-  label: string
-  count: number
-  totalAreaPercent: number
-  severityArea: {
-    ringan: number
-    sedang: number
-    berat: number
-  }
 }
 
 interface ReportLocation {
@@ -76,8 +65,7 @@ const RATE_LIMIT_MAX_RECORDS = 1_000
 const MAX_IMAGE_BASE64_LENGTH = 1_500_000
 const VALID_FETCH_SITES = new Set(["same-origin", "same-site", "none"])
 
-const LIGHT_SEVERITY_MAX_PERCENT = 1.5
-const MEDIUM_SEVERITY_MAX_PERCENT = 4
+// severity thresholds are defined in lib/roboflow-utils
 
 const rateLimitStore =
   globalThis.__roboflowRateLimitStore ?? (globalThis.__roboflowRateLimitStore = new Map())
@@ -99,36 +87,8 @@ function parseOptionalNumber(value: unknown): string | null | "invalid" {
   return "invalid"
 }
 
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null
-  }
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-
-  return null
-}
-
-function normalizeImageInput(rawImage: string): string {
-  const input = rawImage.trim()
-  if (!input.startsWith("data:")) {
-    return input
-  }
-
-  const base64SeparatorIndex = input.indexOf(",")
-  if (base64SeparatorIndex === -1) {
-    return input
-  }
-
-  return input.slice(base64SeparatorIndex + 1)
-}
-
-function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : ""
-}
+// primitive helpers (toFiniteNumber, normalizeImageInput, readString)
+// are imported from lib/common-utils
 
 function splitModelIdSegments(rawModelId: string): string[] {
   const normalized = rawModelId
@@ -364,20 +324,7 @@ function isOriginAllowed(request: Request): boolean {
   return allowedOrigins.includes(origin)
 }
 
-function parseDetectedAt(value: unknown): string {
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Date.parse(value)
-    if (!Number.isNaN(parsed)) {
-      return new Date(parsed).toISOString()
-    }
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return new Date(value).toISOString()
-  }
-
-  return new Date().toISOString()
-}
+// `parseDetectedAt` implemented in lib/common-utils
 
 function parseLocation(value: unknown): ReportLocation | null {
   if (!value || typeof value !== "object") {
@@ -418,20 +365,7 @@ function parseLocation(value: unknown): ReportLocation | null {
   }
 }
 
-function extractMimeFromDataUrl(rawImageInput: string): string | null {
-  const input = rawImageInput.trim()
-  if (!input.startsWith("data:")) {
-    return null
-  }
-
-  const end = input.indexOf(";")
-  if (end === -1) {
-    return null
-  }
-
-  const mime = input.slice(5, end).trim()
-  return mime.length > 0 ? mime : null
-}
+// `extractMimeFromDataUrl` implemented in lib/common-utils
 
 function parseVisualEvidence(
   evidenceValue: unknown,
@@ -470,223 +404,7 @@ function parseVisualEvidence(
     isFhdSource
   }
 }
-
-function normalizePredictions(rawPredictions: unknown): ParsedPrediction[] {
-  if (!Array.isArray(rawPredictions)) {
-    return []
-  }
-
-  const results: ParsedPrediction[] = []
-
-  for (const item of rawPredictions) {
-    if (!item || typeof item !== "object") {
-      continue
-    }
-
-    const source = item as Record<string, unknown>
-    const rawLabel = readString(source.class)
-    const label = rawLabel.length > 0 ? rawLabel : "objek"
-    const width = toFiniteNumber(source.width)
-    const height = toFiniteNumber(source.height)
-
-    if (width === null || height === null || width <= 0 || height <= 0) {
-      continue
-    }
-
-    results.push({
-      label,
-      width,
-      height
-    })
-  }
-
-  return results
-}
-
-function classifySeverity(areaPercent: number): SeverityLevel {
-  if (areaPercent < LIGHT_SEVERITY_MAX_PERCENT) {
-    return "ringan"
-  }
-
-  if (areaPercent < MEDIUM_SEVERITY_MAX_PERCENT) {
-    return "sedang"
-  }
-
-  return "berat"
-}
-
-function classifyClassBucket(label: string): "pothole" | "crack" | "rutting" | "lainnya" {
-  const normalized = label.toLowerCase()
-
-  if (normalized.includes("pothole")) {
-    return "pothole"
-  }
-
-  if (normalized.includes("crack")) {
-    return "crack"
-  }
-
-  if (normalized.includes("rutting")) {
-    return "rutting"
-  }
-
-  return "lainnya"
-}
-
-function dominantSeverityFromArea(severityArea: {
-  ringan: number
-  sedang: number
-  berat: number
-}): DominantSeverity {
-  const total = severityArea.ringan + severityArea.sedang + severityArea.berat
-  if (total <= 0) {
-    return "tidak-terdeteksi"
-  }
-
-  if (severityArea.berat >= severityArea.sedang && severityArea.berat >= severityArea.ringan) {
-    return "berat"
-  }
-
-  if (severityArea.sedang >= severityArea.ringan) {
-    return "sedang"
-  }
-
-  return "ringan"
-}
-
-function buildDamageSummary(
-  predictions: ParsedPrediction[],
-  frameWidth: number | null,
-  frameHeight: number | null
-): {
-  totalDamagePercent: number
-  totalBoxAreaPx: number
-  frameAreaPx: number
-  counts: { ringan: number; sedang: number; berat: number }
-  distributionPercent: { ringan: number; sedang: number; berat: number }
-  dominantSeverity: DominantSeverity
-  breakdownKelas: {
-    counts: {
-      pothole: number
-      crack: number
-      rutting: number
-      lainnya: number
-      totalDeteksi: number
-    }
-    distribusiPersentase: {
-      pothole: number
-      crack: number
-      rutting: number
-      lainnya: number
-    }
-    dominanKelas: string | null
-    daftar: Array<{
-      label: string
-      jumlah: number
-      persentaseJumlah: number
-      totalPersentaseArea: number
-      dominanSeverity: DominantSeverity
-    }>
-  }
-} {
-  const frameAreaPx =
-    frameWidth !== null && frameHeight !== null && frameWidth > 0 && frameHeight > 0
-      ? frameWidth * frameHeight
-      : 0
-
-  const counts = { ringan: 0, sedang: 0, berat: 0 }
-  const areaBySeverity = { ringan: 0, sedang: 0, berat: 0 }
-  const classMap = new Map<string, ClassSummaryAccumulator>()
-  const classBucketCounts = { pothole: 0, crack: 0, rutting: 0, lainnya: 0 }
-
-  let totalBoxAreaPx = 0
-  for (const prediction of predictions) {
-    const areaPx = prediction.width * prediction.height
-    totalBoxAreaPx += areaPx
-
-    const areaPercent = frameAreaPx > 0 ? (areaPx * 100) / frameAreaPx : 0
-    const severity = classifySeverity(areaPercent)
-    counts[severity] += 1
-    areaBySeverity[severity] += areaPercent
-
-    const normalizedLabel = prediction.label.trim().toLowerCase() || "objek"
-    const existing = classMap.get(normalizedLabel)
-    if (existing) {
-      existing.count += 1
-      existing.totalAreaPercent += areaPercent
-      existing.severityArea[severity] += areaPercent
-    } else {
-      classMap.set(normalizedLabel, {
-        label: normalizedLabel,
-        count: 1,
-        totalAreaPercent: areaPercent,
-        severityArea: {
-          ringan: severity === "ringan" ? areaPercent : 0,
-          sedang: severity === "sedang" ? areaPercent : 0,
-          berat: severity === "berat" ? areaPercent : 0
-        }
-      })
-    }
-
-    const bucket = classifyClassBucket(normalizedLabel)
-    classBucketCounts[bucket] += 1
-  }
-
-  const totalDamagePercent = frameAreaPx > 0 ? Math.min(100, (totalBoxAreaPx * 100) / frameAreaPx) : 0
-  const distributionBase = Math.max(0.0001, areaBySeverity.ringan + areaBySeverity.sedang + areaBySeverity.berat)
-  const distributionPercent = {
-    ringan: (areaBySeverity.ringan * 100) / distributionBase,
-    sedang: (areaBySeverity.sedang * 100) / distributionBase,
-    berat: (areaBySeverity.berat * 100) / distributionBase
-  }
-
-  const totalDetections = counts.ringan + counts.sedang + counts.berat
-  const dominantSeverity: DominantSeverity =
-    totalDetections === 0
-      ? "tidak-terdeteksi"
-      : areaBySeverity.berat >= areaBySeverity.sedang && areaBySeverity.berat >= areaBySeverity.ringan
-        ? "berat"
-        : areaBySeverity.sedang >= areaBySeverity.ringan
-          ? "sedang"
-          : "ringan"
-
-  const daftar = Array.from(classMap.values())
-    .map((item) => ({
-      label: item.label,
-      jumlah: item.count,
-      persentaseJumlah: totalDetections > 0 ? (item.count * 100) / totalDetections : 0,
-      totalPersentaseArea: item.totalAreaPercent,
-      dominanSeverity: dominantSeverityFromArea(item.severityArea)
-    }))
-    .sort((a, b) => b.jumlah - a.jumlah)
-
-  const distribusiPersentase = {
-    pothole: totalDetections > 0 ? (classBucketCounts.pothole * 100) / totalDetections : 0,
-    crack: totalDetections > 0 ? (classBucketCounts.crack * 100) / totalDetections : 0,
-    rutting: totalDetections > 0 ? (classBucketCounts.rutting * 100) / totalDetections : 0,
-    lainnya: totalDetections > 0 ? (classBucketCounts.lainnya * 100) / totalDetections : 0
-  }
-
-  const dominanKelas = daftar.length > 0 ? daftar[0].label : null
-
-  return {
-    totalDamagePercent,
-    totalBoxAreaPx,
-    frameAreaPx,
-    counts,
-    distributionPercent,
-    dominantSeverity,
-    breakdownKelas: {
-      counts: {
-        ...classBucketCounts,
-        totalDeteksi: totalDetections
-      },
-      distribusiPersentase,
-      dominanKelas,
-      daftar
-    }
-  }
-}
+  // prediction normalization and damage-summary helpers are provided by lib/roboflow-utils
 
 export async function POST(request: Request) {
   const startedAt = Date.now()
@@ -776,9 +494,16 @@ export async function POST(request: Request) {
     query.set("overlap", overlap)
   }
 
-  const roboflowUrl =
-    `https://detect.roboflow.com/${encodeURIComponent(modelId)}/${encodeURIComponent(modelVersion)}` +
-    `?${query.toString()}`
+  const builtPath = buildRoboflowPath(modelId, modelVersion)
+  if (!builtPath) {
+    return jsonError(
+      400,
+      "INVALID_MODEL_PATH",
+      "Format `modelId` atau `modelVersion` tidak valid. Pastikan `modelId` menggunakan format 'workspace/model'."
+    )
+  }
+
+  const roboflowUrl = `https://detect.roboflow.com/${builtPath.path}?${query.toString()}`
 
   const body = new URLSearchParams({
     image: normalizedImage
@@ -803,10 +528,17 @@ export async function POST(request: Request) {
     }
 
     if (!roboflowResponse.ok) {
-      return jsonError(roboflowResponse.status, "UPSTREAM_HTTP_ERROR", "Request ke Roboflow gagal.", {
-        upstreamStatus: roboflowResponse.status,
-        upstreamBody: responseData
-      })
+      const upstreamMessage = extractUpstreamMessage(responseData)
+      return jsonError(
+        roboflowResponse.status,
+        "UPSTREAM_HTTP_ERROR",
+        upstreamMessage ? `Request ke Roboflow gagal: ${upstreamMessage}` : "Request ke Roboflow gagal.",
+        {
+          upstreamStatus: roboflowResponse.status,
+          upstreamMessage: upstreamMessage ?? null,
+          upstreamBody: responseData
+        }
+      )
     }
 
     const inferenceObject =
@@ -861,7 +593,7 @@ export async function POST(request: Request) {
       },
       "Deteksi berhasil diproses.",
       {
-        modelId,
+        modelId: builtPath.normalizedModelId || modelId,
         modelVersion,
         durationMs: Date.now() - startedAt
       }

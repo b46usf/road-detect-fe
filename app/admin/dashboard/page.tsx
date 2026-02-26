@@ -16,46 +16,9 @@ import {
   type GisMapSettings,
   type StoredDetectionRecord
 } from "@/lib/admin-storage"
+import { formatPercent, severityLabel, severityTone, boolLabel } from "@/lib/ui-utils"
 
-function formatPercent(value: number): string {
-  return `${Math.max(0, Math.min(100, value)).toFixed(1)}%`
-}
-
-function severityLabel(value: StoredDetectionRecord["tingkatKerusakan"]): string {
-  if (value === "ringan") {
-    return "Ringan"
-  }
-
-  if (value === "sedang") {
-    return "Sedang"
-  }
-
-  if (value === "berat") {
-    return "Berat"
-  }
-
-  return "Tidak Terdeteksi"
-}
-
-function severityTone(value: StoredDetectionRecord["tingkatKerusakan"]): string {
-  if (value === "berat") {
-    return "border-rose-300/45 bg-rose-400/15 text-rose-100"
-  }
-
-  if (value === "sedang") {
-    return "border-amber-300/45 bg-amber-400/15 text-amber-100"
-  }
-
-  if (value === "ringan") {
-    return "border-emerald-300/45 bg-emerald-400/15 text-emerald-100"
-  }
-
-  return "border-slate-300/35 bg-slate-300/10 text-slate-200"
-}
-
-function boolLabel(value: boolean): string {
-  return value ? "Aktif" : "Nonaktif"
-}
+// formatPercent, severityLabel, severityTone, boolLabel moved to lib/ui-utils
 
 export default function AdminDashboardPage() {
   const router = useRouter()

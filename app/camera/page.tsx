@@ -7,10 +7,13 @@ import {
   createSpatialRecord,
   type StoredDetectionRecord
 } from "@/lib/admin-storage"
+import { classifySeverity, LIGHT_SEVERITY_MAX_PERCENT, MEDIUM_SEVERITY_MAX_PERCENT } from "@/lib/roboflow-utils"
+import { toFiniteNumber } from "@/lib/common-utils"
+import { formatPercent, severityLabel, dominantSeverityLabel, getSeverityStyles } from "@/lib/ui-utils"
+import { extractApiErrorInfo, extractDetectionReport } from "@/lib/roboflow-client"
 
 type CameraStatus = "starting" | "active" | "idle" | "error"
-type SeverityLevel = "ringan" | "sedang" | "berat"
-type DominantSeverity = SeverityLevel | "tidak-terdeteksi"
+// `SeverityLevel` and `DominantSeverity` come from shared utils
 type GpsStatus = "unsupported" | "tracking" | "ready" | "error"
 
 interface CapturedFrame {
@@ -132,8 +135,7 @@ const INFERENCE_THROTTLE_MS = 2500
 const MAX_CAPTURE_WIDTH = 640
 const MAX_CAPTURE_HEIGHT = 640
 const CAPTURE_JPEG_QUALITY = 0.72
-const LIGHT_SEVERITY_MAX_PERCENT = 1.5
-const MEDIUM_SEVERITY_MAX_PERCENT = 4
+// severity thresholds imported from shared utils
 const DEFAULT_MODEL_ID = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_ID ?? "baguss-workspace/yolov8"
 const DEFAULT_MODEL_VERSION = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION ?? "1"
 const DEFAULT_CONFIDENCE = 0.4
@@ -175,219 +177,11 @@ function mapGeolocationError(error: GeolocationPositionError): string {
   }
 }
 
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null
-  }
+// `toFiniteNumber` imported from `lib/common-utils`
 
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
+// `extractApiErrorInfo` is provided by `lib/roboflow-client`
 
-  return null
-}
-
-function extractApiErrorInfo(payload: unknown): RoboflowApiErrorInfo | null {
-  if (!payload || typeof payload !== "object") {
-    return null
-  }
-
-  const source = payload as Record<string, unknown>
-
-  if (source.ok === true) {
-    return null
-  }
-
-  if (source.ok === false) {
-    const envelopeError =
-      source.error && typeof source.error === "object"
-        ? (source.error as Record<string, unknown>)
-        : null
-
-    const code =
-      envelopeError && typeof envelopeError.code === "string" && envelopeError.code.trim().length > 0
-        ? envelopeError.code
-        : null
-
-    const message =
-      (envelopeError &&
-        typeof envelopeError.message === "string" &&
-        envelopeError.message.trim().length > 0 &&
-        envelopeError.message) ||
-      (typeof source.message === "string" && source.message.trim().length > 0 && source.message) ||
-      "Request API gagal diproses."
-
-    return { code, message }
-  }
-
-  if (typeof source.error === "string" && source.error.trim().length > 0) {
-    return { code: null, message: source.error }
-  }
-
-  return null
-}
-
-function extractDetectionReport(value: unknown): DetectionApiReport | null {
-  if (!value || typeof value !== "object") {
-    return null
-  }
-
-  const source = value as Record<string, unknown>
-  const area = source.luasanKerusakan
-  const level = source.tingkatKerusakan
-  const visual = source.visualBukti
-
-  if (!area || typeof area !== "object" || !level || typeof level !== "object" || !visual || typeof visual !== "object") {
-    return null
-  }
-
-  const areaObject = area as Record<string, unknown>
-  const levelObject = level as Record<string, unknown>
-  const countsObject =
-    levelObject.jumlah && typeof levelObject.jumlah === "object"
-      ? (levelObject.jumlah as Record<string, unknown>)
-      : {}
-  const distObject =
-    levelObject.distribusiPersentase && typeof levelObject.distribusiPersentase === "object"
-      ? (levelObject.distribusiPersentase as Record<string, unknown>)
-      : {}
-  const visualObject = visual as Record<string, unknown>
-  const captureRes =
-    visualObject.resolusiCapture && typeof visualObject.resolusiCapture === "object"
-      ? (visualObject.resolusiCapture as Record<string, unknown>)
-      : {}
-  const sourceRes =
-    visualObject.resolusiSource && typeof visualObject.resolusiSource === "object"
-      ? (visualObject.resolusiSource as Record<string, unknown>)
-      : {}
-
-  const dominantRaw =
-    typeof levelObject.dominan === "string" ? levelObject.dominan.toLowerCase() : "tidak-terdeteksi"
-  const dominant: DominantSeverity =
-    dominantRaw === "ringan" || dominantRaw === "sedang" || dominantRaw === "berat"
-      ? dominantRaw
-      : "tidak-terdeteksi"
-
-  const breakdownRaw = source.breakdownKelas
-  const breakdownObject =
-    breakdownRaw && typeof breakdownRaw === "object" ? (breakdownRaw as Record<string, unknown>) : {}
-  const breakdownCounts =
-    breakdownObject.counts && typeof breakdownObject.counts === "object"
-      ? (breakdownObject.counts as Record<string, unknown>)
-      : {}
-  const breakdownDistribution =
-    breakdownObject.distribusiPersentase && typeof breakdownObject.distribusiPersentase === "object"
-      ? (breakdownObject.distribusiPersentase as Record<string, unknown>)
-      : {}
-  const breakdownListRaw = Array.isArray(breakdownObject.daftar) ? breakdownObject.daftar : []
-  const breakdownList = breakdownListRaw
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null
-      }
-
-      const row = item as Record<string, unknown>
-      const severityRaw = typeof row.dominanSeverity === "string" ? row.dominanSeverity.toLowerCase() : "tidak-terdeteksi"
-      const dominantSeverity: DominantSeverity =
-        severityRaw === "ringan" || severityRaw === "sedang" || severityRaw === "berat"
-          ? severityRaw
-          : "tidak-terdeteksi"
-
-      const label = typeof row.label === "string" && row.label.trim().length > 0 ? row.label : "objek"
-      const jumlah = Math.max(0, toFiniteNumber(row.jumlah) ?? 0)
-
-      return {
-        label,
-        jumlah,
-        persentaseJumlah: Math.max(0, toFiniteNumber(row.persentaseJumlah) ?? 0),
-        totalPersentaseArea: Math.max(0, toFiniteNumber(row.totalPersentaseArea) ?? 0),
-        dominanSeverity: dominantSeverity
-      }
-    })
-    .filter((item): item is DetectionApiReport["breakdownKelas"]["daftar"][number] => item !== null)
-
-  const locationRaw = source.lokasi
-  let location: GpsLocation | null = null
-  if (locationRaw && typeof locationRaw === "object") {
-    const locationObj = locationRaw as Record<string, unknown>
-    const latitude = toFiniteNumber(locationObj.latitude)
-    const longitude = toFiniteNumber(locationObj.longitude)
-    if (latitude !== null && longitude !== null) {
-      location = {
-        latitude,
-        longitude,
-        accuracy: toFiniteNumber(locationObj.accuracy),
-        altitude: toFiniteNumber(locationObj.altitude),
-        heading: toFiniteNumber(locationObj.heading),
-        speed: toFiniteNumber(locationObj.speed),
-        timestamp: typeof locationObj.timestamp === "string" ? locationObj.timestamp : new Date().toISOString(),
-        source: typeof locationObj.source === "string" && locationObj.source.trim().length > 0 ? locationObj.source : "gps"
-      }
-    }
-  }
-
-  return {
-    luasanKerusakan: {
-      totalPersentase: toFiniteNumber(areaObject.totalPersentase) ?? 0,
-      totalBoxAreaPx: toFiniteNumber(areaObject.totalBoxAreaPx) ?? 0,
-      frameAreaPx: toFiniteNumber(areaObject.frameAreaPx) ?? 0
-    },
-    tingkatKerusakan: {
-      dominan: dominant,
-      jumlah: {
-        ringan: toFiniteNumber(countsObject.ringan) ?? 0,
-        sedang: toFiniteNumber(countsObject.sedang) ?? 0,
-        berat: toFiniteNumber(countsObject.berat) ?? 0,
-        totalDeteksi: toFiniteNumber(countsObject.totalDeteksi) ?? 0
-      },
-      distribusiPersentase: {
-        ringan: toFiniteNumber(distObject.ringan) ?? 0,
-        sedang: toFiniteNumber(distObject.sedang) ?? 0,
-        berat: toFiniteNumber(distObject.berat) ?? 0
-      }
-    },
-    breakdownKelas: {
-      counts: {
-        pothole: Math.max(0, toFiniteNumber(breakdownCounts.pothole) ?? 0),
-        crack: Math.max(0, toFiniteNumber(breakdownCounts.crack) ?? 0),
-        rutting: Math.max(0, toFiniteNumber(breakdownCounts.rutting) ?? 0),
-        lainnya: Math.max(0, toFiniteNumber(breakdownCounts.lainnya) ?? 0),
-        totalDeteksi: Math.max(0, toFiniteNumber(breakdownCounts.totalDeteksi) ?? 0)
-      },
-      distribusiPersentase: {
-        pothole: Math.max(0, toFiniteNumber(breakdownDistribution.pothole) ?? 0),
-        crack: Math.max(0, toFiniteNumber(breakdownDistribution.crack) ?? 0),
-        rutting: Math.max(0, toFiniteNumber(breakdownDistribution.rutting) ?? 0),
-        lainnya: Math.max(0, toFiniteNumber(breakdownDistribution.lainnya) ?? 0)
-      },
-      dominanKelas:
-        typeof breakdownObject.dominanKelas === "string" && breakdownObject.dominanKelas.trim().length > 0
-          ? breakdownObject.dominanKelas
-          : null,
-      daftar: breakdownList
-    },
-    lokasi: location,
-    waktuDeteksi: typeof source.waktuDeteksi === "string" ? source.waktuDeteksi : new Date().toISOString(),
-    visualBukti: {
-      imageDataUrl:
-        typeof visualObject.imageDataUrl === "string" && visualObject.imageDataUrl.startsWith("data:")
-          ? visualObject.imageDataUrl
-          : null,
-      mime: typeof visualObject.mime === "string" ? visualObject.mime : "image/jpeg",
-      quality: toFiniteNumber(visualObject.quality),
-      resolusiCapture: {
-        width: toFiniteNumber(captureRes.width),
-        height: toFiniteNumber(captureRes.height)
-      },
-      resolusiSource: {
-        width: toFiniteNumber(sourceRes.width),
-        height: toFiniteNumber(sourceRes.height)
-      },
-      isFhdSource: typeof visualObject.isFhdSource === "boolean" ? visualObject.isFhdSource : null
-    }
-  }
-}
+// `extractDetectionReport` is provided by `lib/roboflow-client`
 
 function extractInferencePayload(payload: unknown): {
   data: RoboflowInferenceShape
@@ -478,62 +272,10 @@ function formatConfidence(value: number | null): string | null {
   return `${Math.max(0, Math.min(100, value)).toFixed(1)}%`
 }
 
-function classifySeverity(areaPercent: number): SeverityLevel {
-  if (areaPercent < LIGHT_SEVERITY_MAX_PERCENT) {
-    return "ringan"
-  }
+// classifySeverity provided by shared utils
 
-  if (areaPercent < MEDIUM_SEVERITY_MAX_PERCENT) {
-    return "sedang"
-  }
-
-  return "berat"
-}
-
-function formatPercent(value: number): string {
-  return `${Math.max(0, Math.min(100, value)).toFixed(1)}%`
-}
-
-function severityLabel(severity: SeverityLevel): string {
-  if (severity === "ringan") {
-    return "Ringan"
-  }
-
-  if (severity === "sedang") {
-    return "Sedang"
-  }
-
-  return "Berat"
-}
-
-function dominantSeverityLabel(severity: DominantSeverity): string {
-  if (severity === "tidak-terdeteksi") {
-    return "Tidak Terdeteksi"
-  }
-
-  return severityLabel(severity)
-}
-
-function getSeverityStyles(severity: SeverityLevel): { boxClass: string; labelClass: string } {
-  if (severity === "berat") {
-    return {
-      boxClass: "border-rose-300/95",
-      labelClass: "bg-rose-300 text-rose-950"
-    }
-  }
-
-  if (severity === "sedang") {
-    return {
-      boxClass: "border-amber-300/95",
-      labelClass: "bg-amber-300 text-amber-950"
-    }
-  }
-
-  return {
-    boxClass: "border-emerald-300/95",
-    labelClass: "bg-emerald-300 text-emerald-950"
-  }
-}
+// formatPercent, severityLabel, dominantSeverityLabel, getSeverityStyles
+// are imported from lib/ui-utils
 
 function buildHistoryRecord(params: {
   report: DetectionApiReport
@@ -1293,24 +1035,8 @@ export default function CameraPage() {
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs text-slate-300">Roboflow Model ID</span>
-              <input
-                value={modelId}
-                onChange={(event) => setModelId(event.target.value)}
-                placeholder="contoh: pothole-detection-abc12"
-                className="w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-300/70"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-slate-300">Model Version</span>
-              <input
-                value={modelVersion}
-                onChange={(event) => setModelVersion(event.target.value)}
-                placeholder="contoh: 1"
-                className="w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-300/70"
-              />
-            </label>
+            <input type="hidden" value={modelId} />
+            <input type="hidden" value={modelVersion} />
           </div>
         </header>
 
