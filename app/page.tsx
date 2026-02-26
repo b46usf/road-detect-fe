@@ -42,6 +42,12 @@ export default function Home() {
             >
               Mulai Deteksi
             </Link>
+            <Link
+              href="/admin/login"
+              className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-white/10 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+            >
+              Login Admin
+            </Link>
             <p className="text-sm text-slate-400">Gunakan HTTPS atau localhost agar izin kamera aktif.</p>
           </div>
         </div>
