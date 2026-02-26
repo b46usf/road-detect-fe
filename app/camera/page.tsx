@@ -136,8 +136,8 @@ const MAX_CAPTURE_WIDTH = 640
 const MAX_CAPTURE_HEIGHT = 640
 const CAPTURE_JPEG_QUALITY = 0.72
 // severity thresholds imported from shared utils
-const DEFAULT_MODEL_ID = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_ID ?? "baguss-workspace/yolov8"
-const DEFAULT_MODEL_VERSION = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION ?? "1"
+const DEFAULT_MODEL_ID = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_ID ?? "road-damage-ai"
+const DEFAULT_MODEL_VERSION = process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION ?? "8"
 const DEFAULT_CONFIDENCE = 0.4
 const DEFAULT_OVERLAP = 0.3
 
