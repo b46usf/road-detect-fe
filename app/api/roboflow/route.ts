@@ -320,7 +320,9 @@ function isOriginAllowed(request: Request): boolean {
 
   try {
     const originUrl = new URL(origin)
-    if (originUrl.host === host) {
+    // Normalize host and compare hostname (strip possible port from host header)
+    const hostOnly = host.split(":")[0]
+    if (originUrl.hostname === hostOnly || originUrl.host === host) {
       return true
     }
   } catch {
