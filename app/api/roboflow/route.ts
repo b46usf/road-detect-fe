@@ -535,7 +535,7 @@ export async function POST(request: Request) {
       cache: "no-store"
     })
 
-    const responseText = await roboflowResponse.text()
+    let responseText: string = await roboflowResponse.text()
     let responseData: unknown = { raw: responseText }
     try {
       responseData = JSON.parse(responseText)
@@ -559,7 +559,7 @@ export async function POST(request: Request) {
                 return { raw: responseText }
               }
             })()
-            // terus ke pemrosesan sukses di bawah
+            // lanjut ke pemrosesan sukses setelah if-block
           } else {
             // tetap 405 atau error lain, teruskan penanganan normal
             const upstreamMessageRaw = extractUpstreamMessage(responseData)
