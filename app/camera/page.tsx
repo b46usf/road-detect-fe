@@ -7,7 +7,7 @@ import {
   createSpatialRecord,
   type StoredDetectionRecord
 } from "@/lib/admin-storage"
-import { classifySeverity, LIGHT_SEVERITY_MAX_PERCENT, MEDIUM_SEVERITY_MAX_PERCENT } from "@/lib/roboflow-utils"
+import { classifySeverity, LIGHT_SEVERITY_MAX_PERCENT, MEDIUM_SEVERITY_MAX_PERCENT, type SeverityLevel, type DominantSeverity } from "@/lib/roboflow-utils"
 import { toFiniteNumber } from "@/lib/common-utils"
 import { formatPercent, severityLabel, dominantSeverityLabel, getSeverityStyles } from "@/lib/ui-utils"
 import { extractApiErrorInfo, extractDetectionReport } from "@/lib/roboflow-client"

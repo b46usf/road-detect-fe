@@ -154,12 +154,13 @@ export function extractDetectionReport(value: unknown): any | null {
         typeof ((levelObject.breakdownKelas as Record<string, unknown>)?.dominanKelas) === "string"
           ? ((levelObject.breakdownKelas as Record<string, unknown>)?.dominanKelas as string)
           : null,
-    daftar: daftar.map((row) => ({
-      label: typeof row.label === "string" ? row.label : "",
-      jumlah: Math.max(0, Number(row.jumlah) || 0),
-      persentaseJumlah: Math.max(0, Number(row.persentaseJumlah) || 0),
-      totalPersentaseArea: Math.max(0, Number(row.totalPersentaseArea) || 0),
-      dominanSeverity: typeof row.dominanSeverity === "string" ? row.dominanSeverity : "tidak-terdeteksi"
-    }))
+      daftar: daftar.map((row) => ({
+        label: typeof row.label === "string" ? row.label : "",
+        jumlah: Math.max(0, Number(row.jumlah) || 0),
+        persentaseJumlah: Math.max(0, Number(row.persentaseJumlah) || 0),
+        totalPersentaseArea: Math.max(0, Number(row.totalPersentaseArea) || 0),
+        dominanSeverity: typeof row.dominanSeverity === "string" ? row.dominanSeverity : "tidak-terdeteksi"
+      }))
+    },
   }
 }
