@@ -11,8 +11,8 @@ export function toFiniteNumber(value: unknown): number | null {
   return null
 }
 
-export function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : ""
+export function readString(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
 }
 
 export function normalizeImageInput(rawImage: string): string {

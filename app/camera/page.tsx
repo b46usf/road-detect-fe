@@ -324,15 +324,18 @@ function buildHistoryRecord(params: {
     },
     lokasi: location,
     waktuDeteksi: report.waktuDeteksi,
-    visualBukti: {
-      mime: report.visualBukti.mime,
-      quality: report.visualBukti.quality,
-      captureWidth: report.visualBukti.resolusiCapture.width,
-      captureHeight: report.visualBukti.resolusiCapture.height,
-      sourceWidth: report.visualBukti.resolusiSource.width,
-      sourceHeight: report.visualBukti.resolusiSource.height,
-      isFhdSource: report.visualBukti.isFhdSource
-    },
+    visualBukti: (() => {
+      const vb = (report as any).visualBukti ?? {}
+      return {
+        mime: typeof vb.mime === "string" && vb.mime ? vb.mime : "image/jpeg",
+        quality: typeof vb.quality === "number" ? vb.quality : null,
+        captureWidth: vb.resolusiCapture && typeof vb.resolusiCapture.width === "number" ? vb.resolusiCapture.width : null,
+        captureHeight: vb.resolusiCapture && typeof vb.resolusiCapture.height === "number" ? vb.resolusiCapture.height : null,
+        sourceWidth: vb.resolusiSource && typeof vb.resolusiSource.width === "number" ? vb.resolusiSource.width : null,
+        sourceHeight: vb.resolusiSource && typeof vb.resolusiSource.height === "number" ? vb.resolusiSource.height : null,
+        isFhdSource: typeof vb.isFhdSource === "boolean" ? vb.isFhdSource : null
+      }
+    })(),
     spatial: createSpatialRecord({
       id,
       createdAt,
@@ -1217,20 +1220,18 @@ export default function CameraPage() {
               </p>
               <p className="text-xs text-slate-300">
                 Kelas dominan:{" "}
-                {lastDetectionReport?.breakdownKelas.dominanKelas
-                  ? lastDetectionReport.breakdownKelas.dominanKelas
-                  : "n/a"}
+                {lastDetectionReport?.breakdownKelas?.dominanKelas ?? "n/a"}
               </p>
               <p className="text-xs text-slate-300">
                 Multi-class:{" "}
                 {lastDetectionReport
-                  ? `pothole ${lastDetectionReport.breakdownKelas.counts.pothole}, crack ${lastDetectionReport.breakdownKelas.counts.crack}, rutting ${lastDetectionReport.breakdownKelas.counts.rutting}, lainnya ${lastDetectionReport.breakdownKelas.counts.lainnya}`
+                  ? `pothole ${lastDetectionReport.breakdownKelas?.counts?.pothole ?? 0}, crack ${lastDetectionReport.breakdownKelas?.counts?.crack ?? 0}, rutting ${lastDetectionReport.breakdownKelas?.counts?.rutting ?? 0}, lainnya ${lastDetectionReport.breakdownKelas?.counts?.lainnya ?? 0}`
                   : "n/a"}
               </p>
               <p className="text-xs text-slate-300">
                 Distribusi kelas:{" "}
                 {lastDetectionReport
-                  ? `pothole ${formatPercent(lastDetectionReport.breakdownKelas.distribusiPersentase.pothole)}, crack ${formatPercent(lastDetectionReport.breakdownKelas.distribusiPersentase.crack)}, rutting ${formatPercent(lastDetectionReport.breakdownKelas.distribusiPersentase.rutting)}`
+                  ? `pothole ${formatPercent(lastDetectionReport.breakdownKelas?.distribusiPersentase?.pothole ?? 0)}, crack ${formatPercent(lastDetectionReport.breakdownKelas?.distribusiPersentase?.crack ?? 0)}, rutting ${formatPercent(lastDetectionReport.breakdownKelas?.distribusiPersentase?.rutting ?? 0)}`
                   : "n/a"}
               </p>
               <p className="text-xs text-slate-300">
@@ -1248,8 +1249,8 @@ export default function CameraPage() {
               <p className="text-xs text-slate-300">
                 Visual:{" "}
                 {lastDetectionReport
-                  ? `${lastDetectionReport.visualBukti.resolusiCapture.width ?? "?"}x${lastDetectionReport.visualBukti.resolusiCapture.height ?? "?"} | Source FHD: ${
-                      lastDetectionReport.visualBukti.isFhdSource ? "Ya" : "Tidak"
+                  ? `${lastDetectionReport.visualBukti?.resolusiCapture?.width ?? "?"}x${lastDetectionReport.visualBukti?.resolusiCapture?.height ?? "?"} | Source FHD: ${
+                      lastDetectionReport.visualBukti?.isFhdSource ? "Ya" : "Tidak"
                     }`
                   : "n/a"}
               </p>
@@ -1263,9 +1264,9 @@ export default function CameraPage() {
                   ))}
                 </div>
               )}
-              {lastDetectionReport?.visualBukti.imageDataUrl && (
+              {lastDetectionReport?.visualBukti?.imageDataUrl && (
                 <img
-                  src={lastDetectionReport.visualBukti.imageDataUrl}
+                  src={lastDetectionReport.visualBukti?.imageDataUrl}
                   alt="Visual bukti dari response API"
                   className="mt-2 h-20 w-full rounded-md object-cover"
                 />
