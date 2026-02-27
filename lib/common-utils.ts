@@ -61,3 +61,42 @@ export function parseDetectedAt(value: unknown): string {
 
   return new Date().toISOString()
 }
+
+export function parseLocation(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+  const latitude = toFiniteNumber(source.latitude ?? source.lat)
+  const longitude = toFiniteNumber(source.longitude ?? source.lng ?? source.lon)
+
+  if (latitude === null || longitude === null) {
+    return null
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null
+  }
+
+  const rawTimestamp = source.timestamp
+  const timestamp =
+    typeof rawTimestamp === "string" && rawTimestamp.trim().length > 0
+      ? parseDetectedAt(rawTimestamp)
+      : typeof rawTimestamp === "number" && Number.isFinite(rawTimestamp)
+        ? new Date(rawTimestamp).toISOString()
+        : null
+
+  const sourceLabel = readString(source.source ?? source.provider) || "gps"
+
+  return {
+    latitude,
+    longitude,
+    accuracy: toFiniteNumber(source.accuracy),
+    altitude: toFiniteNumber(source.altitude),
+    heading: toFiniteNumber(source.heading),
+    speed: toFiniteNumber(source.speed),
+    timestamp,
+    source: sourceLabel
+  }
+}

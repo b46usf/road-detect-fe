@@ -2,8 +2,10 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import AdminGisMapPanel from "@/components/admin/gis-map-panel"
+import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import lazyWithSkeleton from "@/components/ui/lazyWithSkeleton"
+
+const AdminGisMapPanel = lazyWithSkeleton(() => import("@/components/admin/gis-map-panel"), { height: 320 })
 import {
   clearAdminSession,
   clearDetectionHistory,
@@ -23,8 +25,16 @@ import { formatPercent, severityLabel, severityTone, boolLabel } from "@/lib/ui-
 export default function AdminDashboardPage() {
   const router = useRouter()
   const [session, setSession] = useState<AdminSession | null>(null)
+  const [allRecords, setAllRecords] = useState<StoredDetectionRecord[]>([])
   const [records, setRecords] = useState<StoredDetectionRecord[]>([])
   const [ready, setReady] = useState(false)
+  const [rfStats, setRfStats] = useState<{ invalidCount: number; lastInvalidAt?: number } | null>(null)
+  const [rfCache, setRfCache] = useState<any>(null)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 25
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [gisSettings, setGisSettings] = useState<GisMapSettings>(getDefaultGisMapSettings())
   const [gisDraft, setGisDraft] = useState<GisMapSettings>(getDefaultGisMapSettings())
   const [gisSaveStatus, setGisSaveStatus] = useState<string | null>(null)
@@ -40,14 +50,39 @@ export default function AdminDashboardPage() {
     const loadedGisSettings = readGisMapSettings()
 
     setSession(currentSession)
-    setRecords(loadedRecords)
+    setAllRecords(loadedRecords)
+    // initialize first page
+    setPage(1)
+    setRecords(loadedRecords.slice(0, PAGE_SIZE))
+    setHasMore(loadedRecords.length > PAGE_SIZE)
     setGisSettings(loadedGisSettings)
     setGisDraft(loadedGisSettings)
     setReady(true)
   }, [router])
 
+  const fetchRfStats = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/admin/roboflow-stats", { cache: "no-store" })
+      if (!resp.ok) {
+        setRfStats(null)
+        setRfCache(null)
+        return
+      }
+
+      const json = await resp.json()
+      if (json && json.ok) {
+        setRfStats(json.stats ?? null)
+        setRfCache(json.cache ?? null)
+      }
+    } catch {
+      setRfStats(null)
+      setRfCache(null)
+    }
+  }, [])
+
   useEffect(() => {
     loadData()
+    void fetchRfStats()
   }, [loadData])
 
   useEffect(() => {
@@ -62,7 +97,7 @@ export default function AdminDashboardPage() {
   }, [loadData])
 
   const stats = useMemo(() => {
-    if (records.length === 0) {
+    if (allRecords.length === 0) {
       return {
         total: 0,
         avgDamage: 0,
@@ -72,12 +107,12 @@ export default function AdminDashboardPage() {
     }
 
     const avgDamage =
-      records.reduce((sum, item) => sum + item.luasanKerusakanPercent, 0) / records.length
-    const heavyCount = records.filter((item) => item.tingkatKerusakan === "berat").length
-    const withGps = records.filter((item) => item.lokasi !== null).length
+      allRecords.reduce((sum, item) => sum + item.luasanKerusakanPercent, 0) / allRecords.length
+    const heavyCount = allRecords.filter((item) => item.tingkatKerusakan === "berat").length
+    const withGps = allRecords.filter((item) => item.lokasi !== null).length
 
     return {
-      total: records.length,
+      total: allRecords.length,
       avgDamage,
       heavyCount,
       withGps
@@ -91,8 +126,38 @@ export default function AdminDashboardPage() {
 
   const handleClearHistory = () => {
     clearDetectionHistory()
+    setAllRecords([])
     setRecords([])
+    setHasMore(false)
   }
+
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return
+    setIsLoadingMore(true)
+    setTimeout(() => {
+      const nextPage = page + 1
+      const start = (nextPage - 1) * PAGE_SIZE
+      const slice = allRecords.slice(0, start + PAGE_SIZE)
+      setRecords(slice)
+      setPage(nextPage)
+      setHasMore(allRecords.length > slice.length)
+      setIsLoadingMore(false)
+    }, 250)
+  }, [isLoadingMore, hasMore, page, allRecords])
+
+  useEffect(() => {
+    if (!sentinelRef.current) return
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          loadMore()
+        }
+      }
+    }, { root: null, rootMargin: '200px', threshold: 0.1 })
+
+    obs.observe(sentinelRef.current)
+    return () => obs.disconnect()
+  }, [loadMore])
 
   const updateGisDraft = useCallback(function updateGisDraft<K extends keyof GisMapSettings>(
     key: K,
@@ -197,6 +262,11 @@ export default function AdminDashboardPage() {
             <article className="rounded-xl border border-white/10 bg-black/35 p-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Data Dengan GPS</p>
               <p className="mt-1 text-xl font-semibold">{stats.withGps}</p>
+            </article>
+            <article className="rounded-xl border border-amber-200/10 bg-black/35 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-amber-200/80">Roboflow Key Invalids</p>
+              <p className="mt-1 text-xl font-semibold text-amber-200">{rfStats ? rfStats.invalidCount : "—"}</p>
+              <p className="mt-1 text-xs text-slate-400">Last: {rfStats?.lastInvalidAt ? new Date(rfStats.lastInvalidAt).toLocaleString("id-ID") : "—"}</p>
             </article>
           </div>
         </header>
@@ -384,8 +454,8 @@ export default function AdminDashboardPage() {
               Belum ada data tersimpan. Jalankan deteksi di halaman kamera untuk mulai mengisi riwayat.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-white/10">
-              <table className="min-w-full divide-y divide-white/10 text-xs sm:text-sm">
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="min-w-full divide-y divide-white/10 text-xs sm:text-sm">
                 <thead className="bg-black/35 text-left text-slate-300">
                   <tr>
                     <th className="px-3 py-2 font-medium">Waktu</th>
@@ -456,8 +526,27 @@ export default function AdminDashboardPage() {
                       </td>
                     </tr>
                   ))}
+                  {isLoadingMore && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-4 text-center text-slate-400">
+                        Memuat lebih banyak...
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+              <div ref={sentinelRef} />
+              {hasMore && !isLoadingMore && (
+                <div className="mt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium transition hover:bg-white/10"
+                  >
+                    Muat lebih banyak
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

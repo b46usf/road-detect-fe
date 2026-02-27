@@ -258,6 +258,80 @@ export function createSpatialRecord(params: {
   }
 }
 
+export function createStoredDetectionRecord(params: {
+  report: any
+  modelId: string
+  modelVersion: string
+  apiMessage: string
+  apiDurationMs: number | null
+}): StoredDetectionRecord {
+  const { report, modelId, modelVersion, apiMessage, apiDurationMs } = params
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const createdAt = new Date().toISOString()
+  const location = report?.lokasi
+    ? {
+        latitude: report.lokasi.latitude,
+        longitude: report.lokasi.longitude,
+        accuracy: report.lokasi.accuracy ?? null,
+        timestamp: report.lokasi.timestamp ?? null,
+        source: report.lokasi.source ?? "gps"
+      }
+    : null
+
+  const luasan = Math.max(0, Number(report?.luasanKerusakan?.totalPersentase) || 0)
+  const tingkat = (report?.tingkatKerusakan?.dominan as StoredSeverityLevel) || "tidak-terdeteksi"
+  const totalDeteksi = Math.max(0, Number(report?.tingkatKerusakan?.jumlah?.totalDeteksi) || 0)
+  const dominantClass = report?.breakdownKelas?.dominanKelas || null
+
+  return {
+    id,
+    createdAt,
+    modelId,
+    modelVersion,
+    apiMessage,
+    apiDurationMs,
+    luasanKerusakanPercent: luasan,
+    tingkatKerusakan: normalizeSeverity(tingkat),
+    totalDeteksi,
+    dominantClass,
+    classCounts: {
+      pothole: Math.max(0, Number(report?.breakdownKelas?.counts?.pothole) || 0),
+      crack: Math.max(0, Number(report?.breakdownKelas?.counts?.crack) || 0),
+      rutting: Math.max(0, Number(report?.breakdownKelas?.counts?.rutting) || 0),
+      lainnya: Math.max(0, Number(report?.breakdownKelas?.counts?.lainnya) || 0),
+      totalDeteksi: Math.max(0, Number(report?.breakdownKelas?.counts?.totalDeteksi) || totalDeteksi)
+    },
+    classDistribution: {
+      pothole: Math.max(0, Number(report?.breakdownKelas?.distribusiPersentase?.pothole) || 0),
+      crack: Math.max(0, Number(report?.breakdownKelas?.distribusiPersentase?.crack) || 0),
+      rutting: Math.max(0, Number(report?.breakdownKelas?.distribusiPersentase?.rutting) || 0),
+      lainnya: Math.max(0, Number(report?.breakdownKelas?.distribusiPersentase?.lainnya) || 0)
+    },
+    lokasi: location,
+    waktuDeteksi: report?.waktuDeteksi || createdAt,
+    visualBukti: {
+      mime: report?.visualBukti?.mime || "image/jpeg",
+      quality: report?.visualBukti?.quality ?? null,
+      captureWidth: report?.visualBukti?.resolusiCapture?.width ?? null,
+      captureHeight: report?.visualBukti?.resolusiCapture?.height ?? null,
+      sourceWidth: report?.visualBukti?.resolusiSource?.width ?? null,
+      sourceHeight: report?.visualBukti?.resolusiSource?.height ?? null,
+      isFhdSource: typeof report?.visualBukti?.isFhdSource === "boolean" ? report.visualBukti.isFhdSource : null
+    },
+    spatial: createSpatialRecord({
+      id,
+      createdAt,
+      waktuDeteksi: report?.waktuDeteksi || createdAt,
+      tingkatKerusakan: normalizeSeverity(tingkat),
+      luasanKerusakanPercent: luasan,
+      dominantClass,
+      modelId,
+      modelVersion,
+      lokasi: location
+    })
+  }
+}
+
 function isSpatialRecord(value: unknown): value is DetectionSpatialRecord {
   if (!value || typeof value !== "object") {
     return false

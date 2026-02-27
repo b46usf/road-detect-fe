@@ -7,7 +7,9 @@ import {
   classifySeverity,
   buildDamageSummary,
 } from "../../../lib/roboflow-utils"
-import { toFiniteNumber, readString, normalizeImageInput, extractMimeFromDataUrl, parseDetectedAt } from "../../../lib/common-utils"
+import { toFiniteNumber, readString, normalizeImageInput, parseDetectedAt, parseLocation, extractMimeFromDataUrl } from "../../../lib/common-utils"
+import { parseVisualEvidence } from "../../../lib/roboflow-utils"
+import { extractUpstreamMessage, translateUpstreamMessage } from "../../../lib/roboflow-client"
 
 interface InferRequestBody {
   image?: unknown
@@ -62,7 +64,8 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 30
 const RATE_LIMIT_MIN_INTERVAL_MS = 1_500
 const RATE_LIMIT_MAX_RECORDS = 1_000
-const API_KEY_VALIDATION_TTL_MS = 5 * 60_000 // cache validation result for 5 minutes
+// API key validation TTL (ms). Can be overridden with env `ROBOFLOW_API_KEY_VALIDATION_TTL_MS`.
+const API_KEY_VALIDATION_TTL_MS = Number(process.env.ROBOFLOW_API_KEY_VALIDATION_TTL_MS) || 60_000 // default 1 minute
 const MAX_IMAGE_BASE64_LENGTH = 1_500_000
 const VALID_FETCH_SITES = new Set(["same-origin", "same-site", "none"])
 
@@ -148,64 +151,8 @@ function buildRoboflowPath(
   }
 }
 
-function extractUpstreamMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null
-  }
-
-  const source = payload as Record<string, unknown>
-
-  const candidates = [source.error, source.message, source.detail, source.reason]
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim().length > 0) {
-      return candidate.trim()
-    }
-  }
-
-  if (source.error && typeof source.error === "object") {
-    const errorObject = source.error as Record<string, unknown>
-    const message =
-      (typeof errorObject.message === "string" && errorObject.message.trim()) ||
-      (typeof errorObject.error === "string" && errorObject.error.trim())
-    if (message) {
-      return message
-    }
-  }
-
-  if (Array.isArray(source.errors) && source.errors.length > 0) {
-    const first = source.errors[0]
-    if (typeof first === "string" && first.trim().length > 0) {
-      return first.trim()
-    }
-    if (first && typeof first === "object") {
-      const firstObject = first as Record<string, unknown>
-      const message =
-        (typeof firstObject.message === "string" && firstObject.message.trim()) ||
-        (typeof firstObject.error === "string" && firstObject.error.trim())
-      if (message) {
-        return message
-      }
-    }
-  }
-
-  return null
-}
-
-// Roboflow biasanya mengembalikan pesan dalam bahasa Inggris. untuk
-// pengalaman pengguna bahasa Indonesia, kita terjemahkan beberapa pesan
-// umum sebelum menampilkannya ke front‑end.
-function translateUpstreamMessage(raw: string): string {
-  const map: Record<string, string> = {
-    "Method Not Allowed": "Metode tidak diizinkan",
-    "Not Found": "Tidak ditemukan",
-    "Bad Request": "Permintaan tidak valid",
-    "Unauthorized": "Tidak terautentikasi",
-    "Internal Server Error": "Kesalahan server",
-    // tambahkan bila diperlukan
-  }
-
-  return map[raw] || raw
-}
+// `extractUpstreamMessage` and `translateUpstreamMessage` are implemented
+// in `lib/roboflow-client.ts` and imported above for reuse.
 
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json(
@@ -351,6 +298,12 @@ declare global {
     expiresAt: number
     info?: unknown
   } | undefined
+
+  // simple in-memory stats for key validation failures
+  var __roboflowApiKeyValidationStats: {
+    invalidCount: number
+    lastInvalidAt?: number
+  } | undefined
 }
 
 async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unknown }> {
@@ -379,6 +332,14 @@ async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unk
       info: { status: resp.status, body }
     }
 
+    if (!ok) {
+      // increment simple in-memory metric
+      globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
+      globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
+      globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
+      console.warn("Roboflow API key validation failed", { status: resp.status, body })
+    }
+
     return { ok, info: { status: resp.status, body } }
   } catch (err) {
     // network/other error when validating key - treat as invalid but include info
@@ -389,90 +350,17 @@ async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unk
       expiresAt: now + API_KEY_VALIDATION_TTL_MS,
       info
     }
+    globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
+    globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
+    globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
+    console.warn("Roboflow API key validation error", info)
     return { ok: false, info }
   }
 }
 
 // `parseDetectedAt` implemented in lib/common-utils
 
-function parseLocation(value: unknown): ReportLocation | null {
-  if (!value || typeof value !== "object") {
-    return null
-  }
-
-  const source = value as Record<string, unknown>
-  const latitude = toFiniteNumber(source.latitude ?? source.lat)
-  const longitude = toFiniteNumber(source.longitude ?? source.lng ?? source.lon)
-
-  if (latitude === null || longitude === null) {
-    return null
-  }
-
-  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-    return null
-  }
-
-  const rawTimestamp = source.timestamp
-  const timestamp =
-    typeof rawTimestamp === "string" && rawTimestamp.trim().length > 0
-      ? parseDetectedAt(rawTimestamp)
-      : typeof rawTimestamp === "number" && Number.isFinite(rawTimestamp)
-        ? new Date(rawTimestamp).toISOString()
-        : null
-
-  const sourceLabel = readString(source.source ?? source.provider) || "gps"
-
-  return {
-    latitude,
-    longitude,
-    accuracy: toFiniteNumber(source.accuracy),
-    altitude: toFiniteNumber(source.altitude),
-    heading: toFiniteNumber(source.heading),
-    speed: toFiniteNumber(source.speed),
-    timestamp,
-    source: sourceLabel
-  }
-}
-
-// `extractMimeFromDataUrl` implemented in lib/common-utils
-
-function parseVisualEvidence(
-  evidenceValue: unknown,
-  rawImageInput: string,
-  fallbackCaptureWidth: number | null,
-  fallbackCaptureHeight: number | null
-): ReportVisualEvidence {
-  const source = evidenceValue && typeof evidenceValue === "object" ? (evidenceValue as Record<string, unknown>) : {}
-
-  const captureWidth = toFiniteNumber(source.captureWidth ?? source.frameWidth) ?? fallbackCaptureWidth
-  const captureHeight = toFiniteNumber(source.captureHeight ?? source.frameHeight) ?? fallbackCaptureHeight
-  const sourceWidth = toFiniteNumber(source.sourceWidth) ?? captureWidth
-  const sourceHeight = toFiniteNumber(source.sourceHeight) ?? captureHeight
-
-  const mime = readString(source.mime) || extractMimeFromDataUrl(rawImageInput) || "image/jpeg"
-  const quality = toFiniteNumber(source.quality)
-  const imageDataUrl = rawImageInput.startsWith("data:") ? rawImageInput : null
-
-  const isFhdSource =
-    sourceWidth !== null && sourceHeight !== null
-      ? Math.max(sourceWidth, sourceHeight) >= 1920 && Math.min(sourceWidth, sourceHeight) >= 1080
-      : null
-
-  return {
-    imageDataUrl,
-    mime,
-    quality,
-    resolusiCapture: {
-      width: captureWidth,
-      height: captureHeight
-    },
-    resolusiSource: {
-      width: sourceWidth,
-      height: sourceHeight
-    },
-    isFhdSource
-  }
-}
+// parseLocation and parseVisualEvidence are centralized in lib/common-utils and lib/roboflow-utils
   // prediction normalization and damage-summary helpers are provided by lib/roboflow-utils
 
 export async function POST(request: Request) {
@@ -482,18 +370,30 @@ export async function POST(request: Request) {
     return jsonError(500, "ENV_MISSING", "ROBOFLOW_API_KEY belum diset di environment server.")
   }
 
-  // validate API key with upstream Roboflow before attempting inference
-  const keyValidation = await validateApiKey(apiKey)
-  if (!keyValidation.ok) {
-    const upstreamMessage = keyValidation.info ?? null
-    return jsonError(
-      401,
-      "INVALID_API_KEY",
-      "ROBOFLOW_API_KEY tidak valid atau tidak dapat diverifikasi.",
-      {
-        upstream: upstreamMessage
-      }
-    )
+  // Option to skip API key validation via env (set to 'true' to skip)
+  const skipValidationEnv = readString(process.env.ROBOFLOW_SKIP_KEY_VALIDATION)
+  const skipKeyValidation = skipValidationEnv === "true"
+
+  if (!skipKeyValidation) {
+    // validate API key with upstream Roboflow before attempting inference
+    const keyValidation = await validateApiKey(apiKey)
+    if (!keyValidation.ok) {
+      const upstreamMessage = keyValidation.info ?? null
+      // record quick metric available on global
+      globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
+      globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
+
+      return jsonError(
+        401,
+        "INVALID_API_KEY",
+        "ROBOFLOW_API_KEY tidak valid atau tidak dapat diverifikasi.",
+        {
+          upstream: upstreamMessage
+        }
+      )
+    }
+  } else {
+    console.info("Skipping Roboflow API key validation via ROBOFLOW_SKIP_KEY_VALIDATION")
   }
 
   const endpointSecret = readString(process.env.ROBOFLOW_ENDPOINT_SECRET)

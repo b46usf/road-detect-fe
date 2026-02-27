@@ -1,3 +1,5 @@
+import { toFiniteNumber, readString, extractMimeFromDataUrl } from "./common-utils"
+
 export type SeverityLevel = "ringan" | "sedang" | "berat"
 export type DominantSeverity = SeverityLevel | "tidak-terdeteksi"
 
@@ -48,6 +50,51 @@ export function normalizePredictions(rawPredictions: unknown): ParsedPrediction[
       width,
       height
     })
+  }
+
+  return results
+}
+
+// Detection shape used by client camera UI (includes position + confidence)
+export interface DetectionPrediction {
+  x: number
+  y: number
+  width: number
+  height: number
+  label: string
+  confidence: number | null
+}
+
+// Normalize model/raw predictions into detection predictions usable by camera UI
+export function normalizePredictionsToDetections(rawPredictions: unknown): DetectionPrediction[] {
+  if (!Array.isArray(rawPredictions)) {
+    return []
+  }
+
+  const results: DetectionPrediction[] = []
+
+  for (const item of rawPredictions) {
+    if (!item || typeof item !== "object") {
+      continue
+    }
+
+    const source = item as Record<string, unknown>
+    const x = toFiniteNumber(source.x)
+    const y = toFiniteNumber(source.y)
+    const width = toFiniteNumber(source.width)
+    const height = toFiniteNumber(source.height)
+
+    if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
+      continue
+    }
+
+    const rawLabel = source.class
+    const label = typeof rawLabel === "string" && rawLabel.trim().length > 0 ? rawLabel : "objek"
+
+    const rawConfidence = toFiniteNumber(source.confidence)
+    const confidence = rawConfidence === null ? null : rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence
+
+    results.push({ x, y, width, height, label, confidence })
   }
 
   return results
@@ -201,5 +248,43 @@ export function buildDamageSummary(
       dominanKelas,
       daftar
     }
+  }
+}
+
+export function parseVisualEvidence(
+  evidenceValue: unknown,
+  rawImageInput: string,
+  fallbackCaptureWidth: number | null,
+  fallbackCaptureHeight: number | null
+): any {
+  const source = evidenceValue && typeof evidenceValue === "object" ? (evidenceValue as Record<string, unknown>) : {}
+
+  const captureWidth = toFiniteNumber(source.captureWidth ?? source.frameWidth) ?? fallbackCaptureWidth
+  const captureHeight = toFiniteNumber(source.captureHeight ?? source.frameHeight) ?? fallbackCaptureHeight
+  const sourceWidth = toFiniteNumber(source.sourceWidth) ?? captureWidth
+  const sourceHeight = toFiniteNumber(source.sourceHeight) ?? captureHeight
+
+  const mime = readString(source.mime) || extractMimeFromDataUrl(rawImageInput) || "image/jpeg"
+  const quality = toFiniteNumber(source.quality)
+  const imageDataUrl = rawImageInput.startsWith("data:") ? rawImageInput : null
+
+  const isFhdSource =
+    sourceWidth !== null && sourceHeight !== null
+      ? Math.max(sourceWidth, sourceHeight) >= 1920 && Math.min(sourceWidth, sourceHeight) >= 1080
+      : null
+
+  return {
+    imageDataUrl,
+    mime,
+    quality,
+    resolusiCapture: {
+      width: captureWidth,
+      height: captureHeight
+    },
+    resolusiSource: {
+      width: sourceWidth,
+      height: sourceHeight
+    },
+    isFhdSource
   }
 }

@@ -38,6 +38,8 @@ export function extractApiErrorInfo(payload: unknown): { code: string | null; me
   return null
 }
 
+import { toFiniteNumber } from "./common-utils"
+
 export function extractDetectionReport(value: unknown): any | null {
   if (!value || typeof value !== "object") {
     return null
@@ -163,4 +165,98 @@ export function extractDetectionReport(value: unknown): any | null {
       }))
     },
   }
+}
+
+export function parseInferenceResponse(payload: unknown): { data: any; report: any | null; message: string; durationMs: number | null } {
+  if (!payload || typeof payload !== "object") {
+    return {
+      data: {},
+      report: null,
+      message: "Deteksi berhasil diproses.",
+      durationMs: null
+    }
+  }
+
+  const source = payload as Record<string, unknown>
+
+  if (source.ok === true) {
+    const message =
+      typeof source.message === "string" && source.message.trim().length > 0
+        ? source.message
+        : "Deteksi berhasil diproses."
+
+    const rawData = source.data && typeof source.data === "object" ? (source.data as Record<string, unknown>) : null
+    const hasNestedInference = rawData && rawData.inference && typeof rawData.inference === "object"
+    const data = hasNestedInference
+      ? (rawData?.inference as any)
+      : ((rawData ?? {}) as any)
+    const report = extractDetectionReport(
+      hasNestedInference ? rawData?.report : (rawData?.report ?? (rawData as any).report)
+    )
+    const durationMs = source.meta && typeof source.meta === "object" ? toFiniteNumber((source.meta as Record<string, unknown>).durationMs) : null
+
+    return { data, report, message, durationMs }
+  }
+
+  return {
+    data: source as any,
+    report: extractDetectionReport((source as any).report),
+    message: "Deteksi berhasil diproses.",
+    durationMs: null
+  }
+}
+
+export function extractUpstreamMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null
+  }
+
+  const source = payload as Record<string, unknown>
+
+  const candidates = [source.error, source.message, source.detail, source.reason]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim()
+    }
+  }
+
+  if (source.error && typeof source.error === "object") {
+    const errorObject = source.error as Record<string, unknown>
+    const message =
+      (typeof errorObject.message === "string" && errorObject.message.trim()) ||
+      (typeof errorObject.error === "string" && errorObject.error.trim())
+    if (message) {
+      return message
+    }
+  }
+
+  if (Array.isArray(source.errors) && source.errors.length > 0) {
+    const first = source.errors[0]
+    if (typeof first === "string" && first.trim().length > 0) {
+      return first.trim()
+    }
+    if (first && typeof first === "object") {
+      const firstObject = first as Record<string, unknown>
+      const message =
+        (typeof firstObject.message === "string" && firstObject.message.trim()) ||
+        (typeof firstObject.error === "string" && firstObject.error.trim())
+      if (message) {
+        return message
+      }
+    }
+  }
+
+  return null
+}
+
+export function translateUpstreamMessage(raw: string): string {
+  const map: Record<string, string> = {
+    "Method Not Allowed": "Metode tidak diizinkan",
+    "Not Found": "Tidak ditemukan",
+    "Bad Request": "Permintaan tidak valid",
+    "Unauthorized": "Tidak terautentikasi",
+    "Internal Server Error": "Kesalahan server"
+  }
+
+  return map[raw] || raw
 }
