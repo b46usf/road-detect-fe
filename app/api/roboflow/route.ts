@@ -444,14 +444,14 @@ export async function POST(request: Request) {
     return jsonError(415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type harus application/json.")
   }
 
-  const fetchSite = readString(request.headers.get("sec-fetch-site")).toLowerCase()
-  if (fetchSite && !VALID_FETCH_SITES.has(fetchSite)) {
-    return jsonError(403, "FORBIDDEN_ORIGIN", "Permintaan lintas-origin tidak diizinkan.")
-  }
+  // const fetchSite = readString(request.headers.get("sec-fetch-site")).toLowerCase()
+  // if (fetchSite && !VALID_FETCH_SITES.has(fetchSite)) {
+  //   return jsonError(403, "FORBIDDEN_ORIGIN", "Permintaan lintas-origin tidak diizinkan.")
+  // }
 
-  if (!isOriginAllowed(request)) {
-    return jsonError(403, "ORIGIN_NOT_ALLOWED", "Origin request tidak diizinkan.")
-  }
+  // if (!isOriginAllowed(request)) {
+  //   return jsonError(403, "ORIGIN_NOT_ALLOWED", "Origin request tidak diizinkan.")
+  // }
 
   const rateLimitResult = applyRateLimit(request)
   if (!rateLimitResult.ok) {
