@@ -62,6 +62,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 30
 const RATE_LIMIT_MIN_INTERVAL_MS = 1_500
 const RATE_LIMIT_MAX_RECORDS = 1_000
+const API_KEY_VALIDATION_TTL_MS = 5 * 60_000 // cache validation result for 5 minutes
 const MAX_IMAGE_BASE64_LENGTH = 1_500_000
 const VALID_FETCH_SITES = new Set(["same-origin", "same-site", "none"])
 
@@ -342,6 +343,56 @@ function isOriginAllowed(request: Request): boolean {
   return allowedOrigins.includes(origin)
 }
 
+// cache validation result in-memory to avoid frequent validation calls
+declare global {
+  var __roboflowApiKeyValidation: {
+    key: string
+    ok: boolean
+    expiresAt: number
+    info?: unknown
+  } | undefined
+}
+
+async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unknown }> {
+  const now = Date.now()
+  const store = globalThis.__roboflowApiKeyValidation
+  if (store && store.key === apiKey && store.expiresAt > now) {
+    return { ok: store.ok, info: store.info }
+  }
+
+  try {
+    const url = `https://api.roboflow.com/?api_key=${encodeURIComponent(apiKey)}`
+    const resp = await fetch(url, { method: "GET", cache: "no-store" })
+    const text = await resp.text()
+    let body: unknown = { raw: text }
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = { raw: text }
+    }
+
+    const ok = resp.ok
+    globalThis.__roboflowApiKeyValidation = {
+      key: apiKey,
+      ok,
+      expiresAt: now + API_KEY_VALIDATION_TTL_MS,
+      info: { status: resp.status, body }
+    }
+
+    return { ok, info: { status: resp.status, body } }
+  } catch (err) {
+    // network/other error when validating key - treat as invalid but include info
+    const info = { error: err instanceof Error ? err.message : String(err) }
+    globalThis.__roboflowApiKeyValidation = {
+      key: apiKey,
+      ok: false,
+      expiresAt: now + API_KEY_VALIDATION_TTL_MS,
+      info
+    }
+    return { ok: false, info }
+  }
+}
+
 // `parseDetectedAt` implemented in lib/common-utils
 
 function parseLocation(value: unknown): ReportLocation | null {
@@ -431,6 +482,20 @@ export async function POST(request: Request) {
     return jsonError(500, "ENV_MISSING", "ROBOFLOW_API_KEY belum diset di environment server.")
   }
 
+  // validate API key with upstream Roboflow before attempting inference
+  const keyValidation = await validateApiKey(apiKey)
+  if (!keyValidation.ok) {
+    const upstreamMessage = keyValidation.info ?? null
+    return jsonError(
+      401,
+      "INVALID_API_KEY",
+      "ROBOFLOW_API_KEY tidak valid atau tidak dapat diverifikasi.",
+      {
+        upstream: upstreamMessage
+      }
+    )
+  }
+
   const endpointSecret = readString(process.env.ROBOFLOW_ENDPOINT_SECRET)
   if (endpointSecret) {
     const incomingSecret = readString(request.headers.get("x-roboflow-endpoint-secret"))
@@ -493,10 +558,30 @@ export async function POST(request: Request) {
   }
 
   const normalizedImage = normalizeImageInput(imageInput)
-  if (normalizedImage.length > MAX_IMAGE_BASE64_LENGTH) {
+  const cleanedBase64 = normalizedImage.replace(/\s+/g, "")
+  if (cleanedBase64.length > MAX_IMAGE_BASE64_LENGTH) {
     return jsonError(413, "PAYLOAD_TOO_LARGE", "Ukuran gambar terlalu besar untuk diproses.", {
       maxBase64Length: MAX_IMAGE_BASE64_LENGTH
     })
+  }
+
+  // Validate base64 payload early to provide clearer error messages
+  try {
+    const buf = Buffer.from(cleanedBase64, "base64")
+    // round-trip check (ignore padding differences)
+    const reencoded = buf.toString("base64").replace(/=+$/, "")
+    const originalNoPad = cleanedBase64.replace(/=+$/, "")
+    if (buf.length === 0 || reencoded !== originalNoPad) {
+      throw new Error("invalid base64 payload")
+    }
+  } catch (err) {
+    console.error("Invalid base64 image for Roboflow request", {
+      length: cleanedBase64.length,
+      head: cleanedBase64.slice(0, 50),
+      tail: cleanedBase64.slice(-50)
+    })
+
+    return jsonError(400, "INVALID_BASE64", "Field `image` berisi base64 tidak valid atau korup.")
   }
 
   const detectedAt = parseDetectedAt(payload.detectedAt)
@@ -523,17 +608,17 @@ export async function POST(request: Request) {
 
   const roboflowUrl = `https://detect.roboflow.com/${builtPath.path}?${query.toString()}`
 
-  const body = new URLSearchParams({
-    image: normalizedImage
-  })
+  // use multipart/form-data to avoid issues with url-encoding of base64
+  // build FormData at time of request so it is only created when needed
 
   try {
+    const form = new FormData()
+    form.append("image", cleanedBase64)
+
     const roboflowResponse = await fetch(roboflowUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body,
+      // intentionally omit Content-Type so the runtime sets multipart boundary
+      body: form,
       cache: "no-store"
     })
 
@@ -547,9 +632,9 @@ export async function POST(request: Request) {
 
     if (!roboflowResponse.ok) {
       // coba fallback GET apabila server mengatakan method tidak diijinkan.
-      if (roboflowResponse.status === 405) {
+        if (roboflowResponse.status === 405) {
         try {
-          const fallbackUrl = `${roboflowUrl}&image=${encodeURIComponent(normalizedImage)}`
+          const fallbackUrl = `${roboflowUrl}&image=${encodeURIComponent(cleanedBase64)}`
           const getResp = await fetch(fallbackUrl, { method: "GET", cache: "no-store" })
           if (getResp.ok) {
             // berhasil pada GET, gunakan respons ini sebagai hasil akhir

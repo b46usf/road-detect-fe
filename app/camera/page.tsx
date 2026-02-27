@@ -546,13 +546,15 @@ export default function CameraPage() {
         const sourceWidth = videoRef.current?.videoWidth ?? frame.width
         const sourceHeight = videoRef.current?.videoHeight ?? frame.height
 
+        const imageToSend = typeof frame.dataUrl === "string" ? frame.dataUrl.trim() : frame.dataUrl
+
         const response = await fetch("/api/roboflow", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            image: frame.dataUrl,
+            image: imageToSend,
             modelId: normalizedModelId,
             modelVersion: normalizedModelVersion,
             confidence: DEFAULT_CONFIDENCE,

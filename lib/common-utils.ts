@@ -17,16 +17,19 @@ export function readString(value: unknown): string {
 
 export function normalizeImageInput(rawImage: string): string {
   const input = rawImage.trim()
+  // If not a data URL, still remove any whitespace/newlines introduced
+  // during transport which may corrupt base64 payloads.
   if (!input.startsWith("data:")) {
-    return input
+    return input.replace(/\s+/g, "")
   }
 
   const base64SeparatorIndex = input.indexOf(",")
   if (base64SeparatorIndex === -1) {
-    return input
+    return input.replace(/\s+/g, "")
   }
 
-  return input.slice(base64SeparatorIndex + 1)
+  // strip header and remove whitespace/newlines from the base64 payload
+  return input.slice(base64SeparatorIndex + 1).replace(/\s+/g, "")
 }
 
 export function extractMimeFromDataUrl(rawImageInput: string): string | null {
