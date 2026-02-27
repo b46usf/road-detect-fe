@@ -613,7 +613,26 @@ export async function POST(request: Request) {
 
   try {
     const form = new FormData()
-    form.append("image", cleanedBase64)
+    const mime = extractMimeFromDataUrl(imageInput) || "image/jpeg"
+    const fileBuffer = Buffer.from(cleanedBase64, "base64")
+
+    // Prefer appending as a binary file in part named 'file' (what Roboflow expects).
+    // Try Blob first (Web FormData), fallback to Buffer append for Node runtimes.
+    try {
+      // @ts-ignore Blob may exist in the runtime
+      const blob = new Blob([fileBuffer], { type: mime })
+      // append with filename so upstream treats it as a file
+      // @ts-ignore some FormData implementations accept third filename arg
+      form.append("file", blob, "upload.jpg")
+    } catch (err) {
+      try {
+        // @ts-ignore Node/undici FormData may accept Buffer + filename
+        form.append("file", fileBuffer, "upload.jpg")
+      } catch (err2) {
+        // last resort: append base64 string under field 'file'
+        form.append("file", cleanedBase64)
+      }
+    }
 
     const roboflowResponse = await fetch(roboflowUrl, {
       method: "POST",
