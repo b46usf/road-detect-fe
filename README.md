@@ -66,6 +66,8 @@ npm run start
 ## Environment Variables
 
 - `ROBOFLOW_API_KEY` : kunci Roboflow (wajib untuk inference).
+- `ROBOFLOW_INFERENCE_ENDPOINT` : (opsional) endpoint inferensi penuh. Default diarahkan ke endpoint serverless ROADSTER.
+  Untuk endpoint serverless workflows, gunakan format `https://serverless.roboflow.com/<workspace>/workflows/<workflow-id>`.
 - `ROBOFLOW_MODEL_ID` : model id default.
 - `ROBOFLOW_MODEL_VERSION` : model version default.
 - `ROBOFLOW_ENDPOINT_SECRET` : secret header `x-roboflow-endpoint-secret` untuk endpoint admin/server.

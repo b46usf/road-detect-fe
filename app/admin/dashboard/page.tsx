@@ -21,6 +21,7 @@ import {
   updateRoboflowAdminStats,
   writeGisMapSettings
 } from "@/lib/admin-storage"
+import { confirmRoadsterAction } from "@/lib/ui/roadster-swal"
 
 const AdminGisMapPanel = lazyWithSkeleton(() => import("@/components/admin/gis-map-panel"), {
   height: 320
@@ -141,7 +142,16 @@ export default function AdminDashboardPage() {
     router.replace("/admin/login")
   }, [router])
 
-  const handleClearHistory = useCallback(() => {
+  const handleClearHistory = useCallback(async () => {
+    const confirmed = await confirmRoadsterAction({
+      title: "Hapus seluruh riwayat deteksi?",
+      text: "Data riwayat lokal di browser ini akan dihapus permanen dan tidak bisa dikembalikan.",
+      confirmButtonText: "Ya, Hapus"
+    })
+    if (!confirmed) {
+      return
+    }
+
     clearDetectionHistory()
     setAllRecords([])
   }, [])
@@ -176,7 +186,16 @@ export default function AdminDashboardPage() {
     setGisSaveStatus(`Konfigurasi GIS tersimpan (${new Date().toLocaleTimeString("id-ID")}).`)
   }, [gisDraft])
 
-  const resetGisSettings = useCallback(() => {
+  const resetGisSettings = useCallback(async () => {
+    const confirmed = await confirmRoadsterAction({
+      title: "Reset konfigurasi GIS ke default?",
+      text: "Pengaturan CRS, layer WMS/WFS, dan boundary akan kembali ke konfigurasi bawaan.",
+      confirmButtonText: "Ya, Reset"
+    })
+    if (!confirmed) {
+      return
+    }
+
     const defaults = getDefaultGisMapSettings()
     setGisDraft(defaults)
     setGisSettings(defaults)

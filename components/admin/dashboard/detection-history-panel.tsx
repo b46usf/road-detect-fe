@@ -1,9 +1,10 @@
 ﻿"use client"
 
 import Link from "next/link"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { StoredDetectionRecord } from "@/lib/admin-storage"
 import AdaptiveDataTable, { type AdaptiveDataColumn } from "@/components/ui/adaptive-data-table"
+import DetectionResultModal from "@/components/admin/dashboard/detection-result-modal"
 import { formatPercent, severityLabel, severityTone } from "@/lib/ui-utils"
 
 interface DetectionHistoryPanelProps {
@@ -12,6 +13,7 @@ interface DetectionHistoryPanelProps {
 
 export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps) {
   const { records } = props
+  const [selectedRecord, setSelectedRecord] = useState<StoredDetectionRecord | null>(null)
 
   const columns = useMemo<AdaptiveDataColumn<StoredDetectionRecord>[]>(
     () => [
@@ -138,6 +140,9 @@ export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps)
           Ke Home
         </Link>
       </div>
+      <p className="mb-3 text-xs text-cyan-200/80">
+        Klik baris tabel atau kartu data untuk melihat popup detail hasil deteksi.
+      </p>
 
       <AdaptiveDataTable
         rows={records}
@@ -148,7 +153,11 @@ export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps)
         emptyMessage="Belum ada data tersimpan. Jalankan deteksi di halaman kamera untuk mulai mengisi riwayat."
         mobileCardTitle={(row) => `${severityLabel(row.tingkatKerusakan)} • ${formatPercent(row.luasanKerusakanPercent)}`}
         mobileCardSubtitle={(row) => new Date(row.waktuDeteksi).toLocaleString("id-ID")}
+        onRowClick={(row) => setSelectedRecord(row)}
+        rowAriaLabel={(row) => `Buka detail deteksi ${new Date(row.waktuDeteksi).toLocaleString("id-ID")}`}
       />
+
+      <DetectionResultModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
     </section>
   )
 }

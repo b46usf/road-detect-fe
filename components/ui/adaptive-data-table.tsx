@@ -22,6 +22,8 @@ interface AdaptiveDataTableProps<T> {
   emptyMessage?: string
   mobileCardTitle?: (row: T) => ReactNode
   mobileCardSubtitle?: (row: T) => ReactNode
+  onRowClick?: (row: T) => void
+  rowAriaLabel?: (row: T) => string
 }
 
 export default function AdaptiveDataTable<T>(props: AdaptiveDataTableProps<T>) {
@@ -33,7 +35,9 @@ export default function AdaptiveDataTable<T>(props: AdaptiveDataTableProps<T>) {
     searchPlaceholder = "Cari data...",
     emptyMessage = "Belum ada data.",
     mobileCardTitle,
-    mobileCardSubtitle
+    mobileCardSubtitle,
+    onRowClick,
+    rowAriaLabel
   } = props
 
   const {
@@ -99,7 +103,27 @@ export default function AdaptiveDataTable<T>(props: AdaptiveDataTableProps<T>) {
               </thead>
               <tbody className="divide-y divide-white/10 bg-black/20">
                 {visibleRows.map((row) => (
-                  <tr key={rowKey(row)}>
+                  <tr
+                    key={rowKey(row)}
+                    className={
+                      onRowClick
+                        ? "cursor-pointer transition hover:bg-cyan-400/5 focus-visible:bg-cyan-400/10"
+                        : undefined
+                    }
+                    tabIndex={onRowClick ? 0 : undefined}
+                    aria-label={onRowClick ? rowAriaLabel?.(row) ?? "Buka detail data" : undefined}
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onKeyDown={
+                      onRowClick
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault()
+                              onRowClick(row)
+                            }
+                          }
+                        : undefined
+                    }
+                  >
                     {columns.map((column) => (
                       <td
                         key={`${rowKey(row)}:${column.id}`}
@@ -123,7 +147,25 @@ export default function AdaptiveDataTable<T>(props: AdaptiveDataTableProps<T>) {
 
           <div className="grid gap-3 md:hidden">
             {visibleRows.map((row) => (
-              <article key={rowKey(row)} className="rounded-xl border border-white/10 bg-black/30 p-3">
+              <article
+                key={rowKey(row)}
+                className={`rounded-xl border border-white/10 bg-black/30 p-3 ${
+                  onRowClick ? "cursor-pointer transition hover:border-cyan-300/40 hover:bg-cyan-400/5" : ""
+                }`}
+                tabIndex={onRowClick ? 0 : undefined}
+                aria-label={onRowClick ? rowAriaLabel?.(row) ?? "Buka detail data" : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          onRowClick(row)
+                        }
+                      }
+                    : undefined
+                }
+              >
                 {(mobileCardTitle || mobileCardSubtitle) && (
                   <header className="mb-2 border-b border-white/10 pb-2">
                     {mobileCardTitle && (

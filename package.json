@@ -12,14 +12,15 @@
     "test:unit": "vitest run tests/unit",
     "test:smoke": "vitest run tests/smoke",
     "test:ab": "vitest run tests/unit/ab-assignment.test.ts",
-    "test:ci": "npm run test:unit && npm run test:smoke"
+    "test:ci": "npm run lint && npm run build && npm run test:unit && npm run test:smoke"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
     "leaflet": "^1.9.4",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "sweetalert2": "^11.26.21"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

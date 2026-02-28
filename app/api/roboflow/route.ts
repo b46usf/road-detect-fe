@@ -13,7 +13,10 @@ import {
 } from "@/lib/common-utils"
 import { extractUpstreamMessage, translateUpstreamMessage } from "@/lib/roboflow-client"
 import { requireRoboflowEndpointSecret } from "@/lib/server/roboflow-endpoint-auth"
-import { buildRoboflowPath } from "@/lib/server/roboflow-model-path"
+import {
+  normalizeRoboflowInferencePayload,
+  resolveRoboflowEndpoint
+} from "@/lib/server/roboflow-endpoint"
 import { applyRoboflowRateLimit } from "@/lib/server/roboflow-rate-limit"
 import { validateRoboflowApiKey } from "@/lib/server/roboflow-api-key-validation"
 import {
@@ -59,6 +62,16 @@ function jsonSuccess(data: unknown, message: string, meta?: Record<string, unkno
     data,
     ...(meta ? { meta } : {})
   })
+}
+
+function sanitizeInferenceUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    url.searchParams.delete("api_key")
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
 }
 
 export async function POST(request: Request) {
@@ -123,14 +136,6 @@ export async function POST(request: Request) {
     return jsonError(400, "IMAGE_REQUIRED", "Field `image` wajib diisi (base64/data URL).")
   }
 
-  if (!modelId || !modelVersion) {
-    return jsonError(
-      400,
-      "MODEL_REQUIRED",
-      "Field `modelId` dan `modelVersion` wajib diisi, atau set env `ROBOFLOW_MODEL_ID` dan `ROBOFLOW_MODEL_VERSION`."
-    )
-  }
-
   const confidence = parseOptionalNumber(payload.confidence)
   if (confidence === "invalid") {
     return jsonError(400, "INVALID_CONFIDENCE", "Field `confidence` harus berupa angka jika dikirim.")
@@ -166,28 +171,27 @@ export async function POST(request: Request) {
   const requestFrameWidth = toFiniteNumber(payload.frameWidth)
   const requestFrameHeight = toFiniteNumber(payload.frameHeight)
 
-  const query = new URLSearchParams({ api_key: apiKey })
-  if (confidence !== null) {
-    query.set("confidence", confidence)
-  }
-  if (overlap !== null) {
-    query.set("overlap", overlap)
-  }
+  const resolvedEndpoint = resolveRoboflowEndpoint({
+    apiKey,
+    modelId,
+    modelVersion,
+    confidence,
+    overlap
+  })
 
-  const builtPath = buildRoboflowPath(modelId, modelVersion)
-  if (!builtPath) {
+  if (!resolvedEndpoint) {
     return jsonError(
       400,
-      "INVALID_MODEL_PATH",
-      "Format `modelId` atau `modelVersion` tidak valid. Gunakan nama model yang benar (mis. 'workspace/model' atau hanya 'model')."
+      "INFERENCE_ENDPOINT_INVALID",
+      "Konfigurasi endpoint inferensi Roboflow tidak valid. Periksa ROBOFLOW_INFERENCE_ENDPOINT atau model path."
     )
   }
 
-  const roboflowUrl = `https://detect.roboflow.com/${builtPath.path}?${query.toString()}`
-
   try {
     const upstream = await forwardInferenceToRoboflow({
-      roboflowUrl,
+      roboflowUrl: resolvedEndpoint.roboflowUrl,
+      apiKey,
+      endpointType: resolvedEndpoint.endpointType,
       cleanedBase64,
       imageInput
     })
@@ -210,10 +214,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const inferenceObject =
-      upstream.responseData && typeof upstream.responseData === "object"
-        ? (upstream.responseData as Record<string, unknown>)
-        : ({ raw: upstream.responseData } as Record<string, unknown>)
+    const inferenceObject = normalizeRoboflowInferencePayload(upstream.responseData)
 
     const responseImage = inferenceObject.image
     const responseImageObject =
@@ -262,8 +263,9 @@ export async function POST(request: Request) {
       },
       "Deteksi berhasil diproses.",
       {
-        modelId: builtPath.normalizedModelId || modelId,
-        modelVersion,
+        modelId: resolvedEndpoint.modelMeta.modelId ?? (modelId || null),
+        modelVersion: resolvedEndpoint.modelMeta.modelVersion ?? (modelVersion || null),
+        inferenceEndpoint: sanitizeInferenceUrl(resolvedEndpoint.roboflowUrl),
         durationMs: Date.now() - startedAt
       }
     )

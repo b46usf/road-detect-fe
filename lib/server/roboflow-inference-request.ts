@@ -1,4 +1,5 @@
 import { extractMimeFromDataUrl, readString } from "@/lib/common-utils"
+import type { RoboflowEndpointType } from "@/lib/server/roboflow-endpoint"
 
 export function parseOptionalNumber(value: unknown): string | null | "invalid" {
   if (value === undefined || value === null) {
@@ -53,6 +54,8 @@ export function isOriginAllowed(request: Request): boolean {
 
 export async function forwardInferenceToRoboflow(params: {
   roboflowUrl: string
+  apiKey: string
+  endpointType: RoboflowEndpointType
   cleanedBase64: string
   imageInput: string
 }): Promise<{
@@ -60,7 +63,72 @@ export async function forwardInferenceToRoboflow(params: {
   status: number
   responseData: unknown
 }> {
-  const { roboflowUrl, cleanedBase64, imageInput } = params
+  const { roboflowUrl, apiKey, endpointType, cleanedBase64, imageInput } = params
+
+  const workflowJsonPayloads: unknown[] = [
+    {
+      api_key: apiKey,
+      inputs: {
+        image: {
+          type: "base64",
+          value: cleanedBase64
+        }
+      }
+    },
+    {
+      api_key: apiKey,
+      inputs: {
+        image: cleanedBase64
+      }
+    },
+    {
+      api_key: apiKey,
+      image: cleanedBase64
+    }
+  ]
+
+  if (endpointType === "workflow") {
+    let latestStatus = 502
+    let latestResponseData: unknown = { error: "Workflow request failed." }
+
+    for (const payload of workflowJsonPayloads) {
+      try {
+        const workflowResponse = await fetch(roboflowUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload),
+          cache: "no-store"
+        })
+
+        latestStatus = workflowResponse.status
+        const text = await workflowResponse.text()
+
+        try {
+          latestResponseData = JSON.parse(text)
+        } catch {
+          latestResponseData = { raw: text }
+        }
+
+        if (workflowResponse.ok) {
+          return {
+            ok: true,
+            status: workflowResponse.status,
+            responseData: latestResponseData
+          }
+        }
+      } catch {
+        latestStatus = 502
+      }
+    }
+
+    return {
+      ok: false,
+      status: latestStatus,
+      responseData: latestResponseData
+    }
+  }
 
   const form = new FormData()
   const mime = extractMimeFromDataUrl(imageInput) || "image/jpeg"
@@ -98,7 +166,8 @@ export async function forwardInferenceToRoboflow(params: {
 
   if (postResponse.status === 405) {
     try {
-      const fallbackUrl = `${roboflowUrl}&image=${encodeURIComponent(cleanedBase64)}`
+      const separator = roboflowUrl.includes("?") ? "&" : "?"
+      const fallbackUrl = `${roboflowUrl}${separator}image=${encodeURIComponent(cleanedBase64)}`
       const getResponse = await fetch(fallbackUrl, { method: "GET", cache: "no-store" })
       const getResponseText = await getResponse.text()
 
@@ -116,6 +185,70 @@ export async function forwardInferenceToRoboflow(params: {
       }
     } catch {
       // keep original response
+    }
+  }
+
+  // Fallback for alternate non-workflow endpoints that require JSON body.
+  if (postResponse.status === 400 || postResponse.status === 401 || postResponse.status === 403 || postResponse.status === 404 || postResponse.status === 405 || postResponse.status === 415) {
+    const jsonPayloads: unknown[] = [
+      {
+        api_key: apiKey,
+        image: cleanedBase64
+      },
+      {
+        image: cleanedBase64
+      },
+      {
+        api_key: apiKey,
+        inputs: {
+          image: {
+            type: "base64",
+            value: cleanedBase64
+          }
+        }
+      },
+      {
+        inputs: {
+          image: {
+            type: "base64",
+            value: cleanedBase64
+          }
+        }
+      }
+    ]
+
+    for (const payload of jsonPayloads) {
+      try {
+        const jsonResponse = await fetch(roboflowUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload),
+          cache: "no-store"
+        })
+
+        const jsonText = await jsonResponse.text()
+        let jsonData: unknown = { raw: jsonText }
+        try {
+          jsonData = JSON.parse(jsonText)
+        } catch {
+          jsonData = { raw: jsonText }
+        }
+
+        if (jsonResponse.ok) {
+          return {
+            ok: true,
+            status: jsonResponse.status,
+            responseData: jsonData
+          }
+        }
+
+        // Keep latest non-OK payload for more informative upstream error.
+        responseData = jsonData
+      } catch {
+        // continue trying the next fallback payload
+      }
     }
   }
 

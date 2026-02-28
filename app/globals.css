@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
+@import "sweetalert2/dist/sweetalert2.min.css";
 
 :root {
   --background: #ffffff;
@@ -114,4 +115,216 @@ body {
 
 .roadster-map-tooltip.leaflet-tooltip-top::before {
   border-top-color: rgba(2, 6, 23, 0.9);
+}
+
+.roadster-swal-popup {
+  width: min(720px, calc(100vw - 24px));
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 100%);
+  color: #0f172a;
+  padding: 14px 14px 12px;
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+}
+
+.roadster-swal-title {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #1e293b;
+}
+
+.roadster-swal-html {
+  margin: 0;
+  text-align: left;
+  color: #1e293b;
+}
+
+.roadster-swal-confirm,
+.roadster-swal-cancel {
+  border-radius: 11px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.roadster-swal-confirm {
+  border: 1px solid rgba(8, 47, 73, 0.2);
+  background: linear-gradient(120deg, #06b6d4 0%, #38bdf8 100%);
+  color: #042f2e;
+}
+
+.roadster-swal-confirm:hover {
+  background: linear-gradient(120deg, #22d3ee 0%, #67e8f9 100%);
+}
+
+.roadster-swal-cancel {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #ffffff;
+  color: #334155;
+}
+
+.roadster-swal-cancel:hover {
+  background: #f8fafc;
+}
+
+.roadster-detection-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roadster-detection-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roadster-detection-icon {
+  display: grid;
+  height: 44px;
+  width: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(130deg, #4f46e5 0%, #0ea5e9 100%);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.roadster-detection-heading {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #312e81;
+}
+
+.roadster-detection-subheading {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #4338ca;
+}
+
+.roadster-detection-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.roadster-detection-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.roadster-detection-card--full {
+  margin-top: 2px;
+}
+
+.roadster-detection-label {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.roadster-detection-value {
+  margin: 8px 0 0;
+  font-size: 33px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.roadster-detection-value--accuracy {
+  color: #059669;
+}
+
+.roadster-detection-value--area {
+  color: #1d4ed8;
+}
+
+.roadster-detection-value--light {
+  color: #047857;
+}
+
+.roadster-detection-value--medium {
+  color: #b45309;
+}
+
+.roadster-detection-value--heavy {
+  color: #be123c;
+}
+
+.roadster-detection-value--neutral {
+  color: #334155;
+}
+
+.roadster-detection-value--recommendation {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.roadster-detection-meta {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  font-size: 11px;
+  color: #475569;
+}
+
+.roadster-detection-meta p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .roadster-swal-popup {
+    border-radius: 18px;
+    padding: 10px 10px 9px;
+  }
+
+  .roadster-swal-title {
+    margin-bottom: 8px;
+    font-size: 17px;
+  }
+
+  .roadster-detection-icon {
+    height: 38px;
+    width: 38px;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+
+  .roadster-detection-heading {
+    font-size: 18px;
+  }
+
+  .roadster-detection-subheading {
+    font-size: 12px;
+  }
+
+  .roadster-detection-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .roadster-detection-card {
+    border-radius: 14px;
+    padding: 10px;
+  }
+
+  .roadster-detection-value {
+    margin-top: 6px;
+    font-size: 24px;
+  }
+
+  .roadster-detection-value--recommendation {
+    font-size: 19px;
+  }
+
+  .roadster-detection-meta {
+    grid-template-columns: 1fr;
+  }
 }
