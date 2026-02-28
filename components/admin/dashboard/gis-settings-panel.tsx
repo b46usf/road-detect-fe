@@ -121,7 +121,7 @@ export default function GisSettingsPanel(props: GisSettingsPanelProps) {
 
       <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Layer Toggles</h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <label className={toggleClassName}>
             <span>Tampilkan titik deteksi</span>
             <input

@@ -1,17 +1,19 @@
 import {
   GIS_INDONESIA_GEOJSON_STORAGE_KEY,
-  GIS_WFS_GEOJSON_STORAGE_KEY
+  GIS_INDONESIA_GEOJSON_STORAGE_KEY_LEGACY,
+  GIS_WFS_GEOJSON_STORAGE_KEY,
+  GIS_WFS_GEOJSON_STORAGE_KEY_LEGACY
 } from "./constants"
-import { canUseLocalStorage, parseJson } from "./local-storage"
+import { canUseLocalStorage, parseJson, readStorageItemWithLegacy } from "./local-storage"
 import type { GeoJsonCacheEntry } from "./types"
 import { readString } from "@/lib/common-utils"
 
-function readGeoJsonCacheByKey(key: string): GeoJsonCacheEntry | null {
+function readGeoJsonCacheByKey(key: string, legacyKey: string): GeoJsonCacheEntry | null {
   if (!canUseLocalStorage()) {
     return null
   }
 
-  const raw = window.localStorage.getItem(key)
+  const raw = readStorageItemWithLegacy(key, [legacyKey])
   const parsed = parseJson<unknown>(raw, null)
   if (!parsed || typeof parsed !== "object") {
     return null
@@ -48,7 +50,10 @@ function writeGeoJsonCacheByKey(
 }
 
 export function readIndonesiaGeoJsonCache(): GeoJsonCacheEntry | null {
-  return readGeoJsonCacheByKey(GIS_INDONESIA_GEOJSON_STORAGE_KEY)
+  return readGeoJsonCacheByKey(
+    GIS_INDONESIA_GEOJSON_STORAGE_KEY,
+    GIS_INDONESIA_GEOJSON_STORAGE_KEY_LEGACY
+  )
 }
 
 export function writeIndonesiaGeoJsonCache(
@@ -58,7 +63,7 @@ export function writeIndonesiaGeoJsonCache(
 }
 
 export function readWfsGeoJsonCache(): GeoJsonCacheEntry | null {
-  return readGeoJsonCacheByKey(GIS_WFS_GEOJSON_STORAGE_KEY)
+  return readGeoJsonCacheByKey(GIS_WFS_GEOJSON_STORAGE_KEY, GIS_WFS_GEOJSON_STORAGE_KEY_LEGACY)
 }
 
 export function writeWfsGeoJsonCache(

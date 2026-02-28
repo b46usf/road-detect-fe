@@ -134,7 +134,7 @@ export function useGisMapLayerEffects(args: UseGisMapLayerEffectsArgs) {
           permanent: showPermanentTags,
           direction: "top",
           offset: [0, -28],
-          className: "road-detect-map-tooltip",
+          className: "roadster-map-tooltip",
           opacity: 0.95,
           sticky: true
         })

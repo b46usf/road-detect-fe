@@ -1,4 +1,11 @@
 import Link from "next/link"
+import Image from "next/image"
+import {
+  ROADSTER_CAMERA_DESCRIPTION,
+  ROADSTER_LOGO_ALT,
+  ROADSTER_LOGO_PATH,
+  ROADSTER_NAME
+} from "@/lib/app-brand"
 import { formatPercent, getSeverityStyles, severityLabel } from "@/lib/ui-utils"
 import { formatConfidence } from "./camera-utils"
 import type { RenderedDetection } from "./types"
@@ -36,10 +43,19 @@ export default function CameraStageCard(props: CameraStageCardProps) {
       <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/90">Live Detection</p>
-            <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Deteksi Jalan Realtime</h1>
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-cyan-200/90">
+              <Image
+                src={ROADSTER_LOGO_PATH}
+                alt={ROADSTER_LOGO_ALT}
+                width={16}
+                height={16}
+                className="h-4 w-4 rounded-sm object-cover"
+              />
+              {ROADSTER_NAME} Camera
+            </p>
+            <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Realtime Road Damage Detection</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Snapshot diambil tiap 1 detik. Inference di-throttle tiap 2.5 detik dengan frame yang sudah di-resize agar quota Roboflow lebih awet.
+              {ROADSTER_CAMERA_DESCRIPTION}
             </p>
           </div>
 

@@ -1,19 +1,35 @@
 import Link from "next/link"
+import Image from "next/image"
+import type { Metadata } from "next"
+import {
+  ROADSTER_FULL_NAME,
+  ROADSTER_HOME_DESCRIPTION,
+  ROADSTER_LOGO_ALT,
+  ROADSTER_LOGO_PATH,
+  ROADSTER_NAME
+} from "@/lib/app-brand"
 
 const highlights = [
   {
-    title: "Deteksi Realtime",
-    description: "Pantau kondisi jalan langsung dari kamera HP tanpa alur yang rumit."
+    title: "AI Recognition Realtime",
+    description: "ROADSTER membaca indikasi kerusakan jalan secara cepat langsung dari kamera perangkat."
   },
   {
-    title: "Cepat Dipakai Tim Lapangan",
-    description: "UI fokus ke aksi inti agar pelaporan kondisi jalan lebih efisien."
+    title: "Siap Untuk Tim Lapangan",
+    description: "Alur dibuat ringkas agar proses identifikasi, validasi, dan pelaporan jalan lebih efisien."
   },
   {
-    title: "Mobile-First",
-    description: "Tampilan tetap proporsional di layar kecil maupun desktop."
+    title: "GIS-Ready Monitoring",
+    description: "Hasil deteksi dapat dipantau dari dashboard admin lengkap dengan konteks spasial dan statistik."
   }
 ]
+
+export const metadata: Metadata = {
+  title: {
+    absolute: ROADSTER_FULL_NAME
+  },
+  description: ROADSTER_HOME_DESCRIPTION
+}
 
 export default function Home() {
   return (
@@ -23,16 +39,24 @@ export default function Home() {
 
       <section className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-10 px-6 py-14 md:py-20">
         <div className="space-y-6 text-center md:text-left">
-          <p className="inline-flex rounded-full border border-white/20 bg-white/5 px-4 py-1 text-sm text-slate-200">
-            Road Damage Monitoring
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-sm text-slate-200">
+            <Image
+              src={ROADSTER_LOGO_PATH}
+              alt={ROADSTER_LOGO_ALT}
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] rounded-sm object-cover"
+              priority
+            />
+            {ROADSTER_NAME}
           </p>
 
           <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">
-            Realtime Deteksi Jalan Berlubang dengan Kamera Perangkat
+            {ROADSTER_FULL_NAME}
           </h1>
 
           <p className="max-w-2xl text-base text-slate-300 md:text-lg">
-            Mulai inspeksi visual jalan secara cepat. Sistem akan membuka kamera, lalu menampilkan proses deteksi secara langsung.
+            {ROADSTER_HOME_DESCRIPTION}
           </p>
 
           <div className="flex flex-col items-center gap-3 sm:flex-row md:items-start">
@@ -40,7 +64,7 @@ export default function Home() {
               href="/camera"
               className="inline-flex items-center justify-center rounded-xl bg-cyan-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
             >
-              Mulai Deteksi
+              Mulai ROADSTER Camera
             </Link>
             <Link
               href="/admin/login"

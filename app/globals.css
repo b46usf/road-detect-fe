@@ -26,12 +26,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.road-detect-pin-wrapper {
+.roadster-pin-wrapper {
   background: transparent;
   border: none;
 }
 
-.road-detect-pin {
+.roadster-pin {
   position: relative;
   margin: 0 auto;
   height: 18px;
@@ -41,7 +41,7 @@ body {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.45);
 }
 
-.road-detect-pin::after {
+.roadster-pin::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -53,7 +53,7 @@ body {
   filter: drop-shadow(0 6px 8px rgba(2, 6, 23, 0.4));
 }
 
-.road-detect-pin__dot {
+.roadster-pin__dot {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -64,7 +64,7 @@ body {
   background: #f8fafc;
 }
 
-.road-detect-pin__label {
+.roadster-pin__label {
   position: relative;
   left: 50%;
   margin-top: 12px;
@@ -81,27 +81,27 @@ body {
   white-space: nowrap;
 }
 
-.road-detect-pin--light {
+.roadster-pin--light {
   color: #34d399;
   background: #059669;
 }
 
-.road-detect-pin--medium {
+.roadster-pin--medium {
   color: #fbbf24;
   background: #d97706;
 }
 
-.road-detect-pin--heavy {
+.roadster-pin--heavy {
   color: #fb7185;
   background: #be123c;
 }
 
-.road-detect-pin--unknown {
+.roadster-pin--unknown {
   color: #94a3b8;
   background: #475569;
 }
 
-.road-detect-map-tooltip {
+.roadster-map-tooltip {
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(2, 6, 23, 0.9);
@@ -112,6 +112,6 @@ body {
   box-shadow: 0 10px 30px rgba(2, 6, 23, 0.4);
 }
 
-.road-detect-map-tooltip.leaflet-tooltip-top::before {
+.roadster-map-tooltip.leaflet-tooltip-top::before {
   border-top-color: rgba(2, 6, 23, 0.9);
 }

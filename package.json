@@ -1,5 +1,5 @@
 {
-  "name": "road-detect-fe",
+  "name": "roadster-fe",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync:roboflow": "node scripts/sync-roboflow-stats.js"
+    "sync:roboflow": "node scripts/sync-roboflow-stats.js",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run tests/unit",
+    "test:smoke": "vitest run tests/smoke",
+    "test:ab": "vitest run tests/unit/ab-assignment.test.ts",
+    "test:ci": "npm run test:unit && npm run test:smoke"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
@@ -23,7 +28,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jsdom": "^28.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18"
   }
 }

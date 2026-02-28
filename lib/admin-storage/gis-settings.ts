@@ -1,6 +1,10 @@
 import { readString } from "@/lib/common-utils"
-import { DEFAULT_GIS_MAP_SETTINGS, GIS_MAP_SETTINGS_STORAGE_KEY } from "./constants"
-import { canUseLocalStorage, parseJson } from "./local-storage"
+import {
+  DEFAULT_GIS_MAP_SETTINGS,
+  GIS_MAP_SETTINGS_STORAGE_KEY,
+  GIS_MAP_SETTINGS_STORAGE_KEY_LEGACY
+} from "./constants"
+import { canUseLocalStorage, parseJson, readStorageItemWithLegacy } from "./local-storage"
 import type { GisMapSettings } from "./types"
 
 export function getDefaultGisMapSettings(): GisMapSettings {
@@ -14,7 +18,7 @@ export function readGisMapSettings(): GisMapSettings {
     return getDefaultGisMapSettings()
   }
 
-  const raw = window.localStorage.getItem(GIS_MAP_SETTINGS_STORAGE_KEY)
+  const raw = readStorageItemWithLegacy(GIS_MAP_SETTINGS_STORAGE_KEY, [GIS_MAP_SETTINGS_STORAGE_KEY_LEGACY])
   const parsed = parseJson<unknown>(raw, {})
   const source = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}
 

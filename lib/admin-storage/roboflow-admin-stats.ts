@@ -1,8 +1,14 @@
 import {
   ROBOFLOW_ADMIN_STATS_STORAGE_KEY,
+  ROBOFLOW_ADMIN_STATS_STORAGE_KEY_LEGACY,
   ROBOFLOW_WRITE_DEBOUNCE_MS
 } from "./constants"
-import { canUseLocalStorage, parseJson } from "./local-storage"
+import {
+  canUseLocalStorage,
+  parseJson,
+  readStorageItemWithLegacy,
+  removeStorageKeys
+} from "./local-storage"
 import type { RoboflowAdminPersist } from "./types"
 
 interface RoboflowStatsWindow extends Window {
@@ -24,7 +30,9 @@ export function readRoboflowAdminStats(): RoboflowAdminPersist | null {
     return null
   }
 
-  const raw = statsWindow.localStorage.getItem(ROBOFLOW_ADMIN_STATS_STORAGE_KEY)
+  const raw = readStorageItemWithLegacy(ROBOFLOW_ADMIN_STATS_STORAGE_KEY, [
+    ROBOFLOW_ADMIN_STATS_STORAGE_KEY_LEGACY
+  ])
   const parsed = parseJson<RoboflowAdminPersist | null>(raw, null)
   if (!parsed || typeof parsed !== "object") {
     return null
@@ -43,7 +51,7 @@ function immediateWriteRoboflowAdminStats(
 
   try {
     if (payload === null) {
-      statsWindow.localStorage.removeItem(ROBOFLOW_ADMIN_STATS_STORAGE_KEY)
+      removeStorageKeys([ROBOFLOW_ADMIN_STATS_STORAGE_KEY, ROBOFLOW_ADMIN_STATS_STORAGE_KEY_LEGACY])
       return { ok: true }
     }
 

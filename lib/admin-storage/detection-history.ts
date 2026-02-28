@@ -1,7 +1,16 @@
 import { readString, toFiniteNumber } from "@/lib/common-utils"
 import type { DetectionReport } from "@/lib/roboflow-client"
-import { DETECTION_HISTORY_MAX_ITEMS, DETECTION_HISTORY_STORAGE_KEY } from "./constants"
-import { canUseLocalStorage, parseJson } from "./local-storage"
+import {
+  DETECTION_HISTORY_MAX_ITEMS,
+  DETECTION_HISTORY_STORAGE_KEY,
+  DETECTION_HISTORY_STORAGE_KEY_LEGACY
+} from "./constants"
+import {
+  canUseLocalStorage,
+  parseJson,
+  readStorageItemWithLegacy,
+  removeStorageKeys
+} from "./local-storage"
 import {
   createSpatialRecord,
   isSpatialRecord,
@@ -180,7 +189,9 @@ export function readDetectionHistory(): StoredDetectionRecord[] {
     return []
   }
 
-  const raw = window.localStorage.getItem(DETECTION_HISTORY_STORAGE_KEY)
+  const raw = readStorageItemWithLegacy(DETECTION_HISTORY_STORAGE_KEY, [
+    DETECTION_HISTORY_STORAGE_KEY_LEGACY
+  ])
   const parsed = parseJson<unknown>(raw, [])
   if (!Array.isArray(parsed)) {
     return []
@@ -235,5 +246,5 @@ export function clearDetectionHistory(): void {
     return
   }
 
-  window.localStorage.removeItem(DETECTION_HISTORY_STORAGE_KEY)
+  removeStorageKeys([DETECTION_HISTORY_STORAGE_KEY, DETECTION_HISTORY_STORAGE_KEY_LEGACY])
 }

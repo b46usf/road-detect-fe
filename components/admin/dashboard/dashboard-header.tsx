@@ -1,3 +1,10 @@
+import Image from "next/image"
+import {
+  ROADSTER_ADMIN_DESCRIPTION,
+  ROADSTER_LOGO_ALT,
+  ROADSTER_LOGO_PATH,
+  ROADSTER_NAME
+} from "@/lib/app-brand"
 import { formatPercent } from "@/lib/ui-utils"
 
 export interface DashboardSummaryStats {
@@ -23,9 +30,21 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
     <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/90">Admin Dashboard</p>
-          <h1 className="mt-1 text-2xl font-semibold">Monitoring Riwayat Deteksi + GIS</h1>
+          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-cyan-200/90">
+            <Image
+              src={ROADSTER_LOGO_PATH}
+              alt={ROADSTER_LOGO_ALT}
+              width={16}
+              height={16}
+              className="h-4 w-4 rounded-sm object-cover"
+            />
+            {ROADSTER_NAME} Admin
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">Monitoring Deteksi + GIS Dashboard</h1>
           <p className="mt-2 text-sm text-slate-300">
+            {ROADSTER_ADMIN_DESCRIPTION}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
             Login aktif: <span className="font-medium text-slate-100">{username}</span>
           </p>
         </div>

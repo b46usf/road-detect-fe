@@ -10,18 +10,18 @@ export interface LeafletLayerState {
 
 function severityToneClass(severity: string): string {
   if (severity === "berat") {
-    return "road-detect-pin--heavy"
+    return "roadster-pin--heavy"
   }
 
   if (severity === "sedang") {
-    return "road-detect-pin--medium"
+    return "roadster-pin--medium"
   }
 
   if (severity === "ringan") {
-    return "road-detect-pin--light"
+    return "roadster-pin--light"
   }
 
-  return "road-detect-pin--unknown"
+  return "roadster-pin--unknown"
 }
 
 function escapeHtml(value: string): string {
@@ -44,12 +44,12 @@ export function buildDetectionPinIcon(
   const safeLabel = escapeHtml(label)
 
   return L.divIcon({
-    className: "road-detect-pin-wrapper",
+    className: "roadster-pin-wrapper",
     html: `
-      <div class="road-detect-pin ${severityToneClass(severity)}">
-        <span class="road-detect-pin__dot"></span>
+      <div class="roadster-pin ${severityToneClass(severity)}">
+        <span class="roadster-pin__dot"></span>
       </div>
-      <span class="road-detect-pin__label">${safeLabel}</span>
+      <span class="roadster-pin__label">${safeLabel}</span>
     `,
     iconSize: [30, 40],
     iconAnchor: [15, 34],

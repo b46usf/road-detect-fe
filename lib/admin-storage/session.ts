@@ -1,5 +1,15 @@
-import { ADMIN_DEFAULT_PASSWORD, ADMIN_DEFAULT_USERNAME, ADMIN_SESSION_STORAGE_KEY } from "./constants"
-import { canUseLocalStorage, parseJson } from "./local-storage"
+import {
+  ADMIN_DEFAULT_PASSWORD,
+  ADMIN_DEFAULT_USERNAME,
+  ADMIN_SESSION_STORAGE_KEY,
+  ADMIN_SESSION_STORAGE_KEY_LEGACY
+} from "./constants"
+import {
+  canUseLocalStorage,
+  parseJson,
+  readStorageItemWithLegacy,
+  removeStorageKeys
+} from "./local-storage"
 import type { AdminSession } from "./types"
 
 export function validateAdminCredentials(username: string, password: string): boolean {
@@ -11,7 +21,7 @@ export function readAdminSession(): AdminSession | null {
     return null
   }
 
-  const raw = window.localStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
+  const raw = readStorageItemWithLegacy(ADMIN_SESSION_STORAGE_KEY, [ADMIN_SESSION_STORAGE_KEY_LEGACY])
   const parsed = parseJson<AdminSession | null>(raw, null)
 
   if (!parsed || typeof parsed !== "object") {
@@ -47,5 +57,5 @@ export function clearAdminSession(): void {
     return
   }
 
-  window.localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+  removeStorageKeys([ADMIN_SESSION_STORAGE_KEY, ADMIN_SESSION_STORAGE_KEY_LEGACY])
 }
