@@ -680,3 +680,94 @@ export function writeWfsGeoJsonCache(
 ): { ok: true } | { ok: false; message: string } {
   return writeGeoJsonCacheByKey(GIS_WFS_GEOJSON_STORAGE_KEY, payload)
 }
+
+// ---- Roboflow admin stats persistence (localStorage) ----
+export const ROBOFLOW_ADMIN_STATS_STORAGE_KEY = "road-detect:roboflow-admin-stats:v1"
+
+export interface RoboflowAdminPersist {
+  stats: { invalidCount: number; lastInvalidAt?: number } | null
+  cache: unknown | null
+  updatedAt: string
+}
+
+export function readRoboflowAdminStats(): RoboflowAdminPersist | null {
+  if (typeof window === "undefined") return null
+  const raw = window.localStorage.getItem(ROBOFLOW_ADMIN_STATS_STORAGE_KEY)
+  const parsed = parseJson<RoboflowAdminPersist | null>(raw, null)
+  if (!parsed || typeof parsed !== "object") return null
+  return parsed
+}
+const ROBOFLOW_WRITE_DEBOUNCE_MS = 2000
+
+function immediateWriteRoboflowAdminStats(payload: RoboflowAdminPersist | null): { ok: true } | { ok: false; message: string } {
+  try {
+    if (payload === null) {
+      window.localStorage.removeItem(ROBOFLOW_ADMIN_STATS_STORAGE_KEY)
+      return { ok: true }
+    }
+    window.localStorage.setItem(ROBOFLOW_ADMIN_STATS_STORAGE_KEY, JSON.stringify(payload))
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, message: "Gagal menyimpan Roboflow admin stats ke localStorage." }
+  }
+}
+
+function scheduleRoboflowWrite(payload: RoboflowAdminPersist | null): { ok: true } | { ok: false; message: string } {
+  // store pending payload on window and debounce actual write
+  try {
+    ;(window as any).__roboflowAdminStatsPending = payload
+    const existingTimer = (window as any).__roboflowAdminStatsTimer as number | undefined
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+    }
+
+    ;(window as any).__roboflowAdminStatsTimer = window.setTimeout(() => {
+      try {
+        const pending = (window as any).__roboflowAdminStatsPending as RoboflowAdminPersist | null
+        immediateWriteRoboflowAdminStats(pending ?? null)
+      } finally {
+        ;(window as any).__roboflowAdminStatsPending = null
+        ;(window as any).__roboflowAdminStatsTimer = undefined
+      }
+    }, ROBOFLOW_WRITE_DEBOUNCE_MS) as unknown as number
+
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, message: "Gagal menjadwalkan penulisan Roboflow stats ke localStorage." }
+  }
+}
+
+export function writeRoboflowAdminStats(payload: RoboflowAdminPersist | null): { ok: true } | { ok: false; message: string } {
+  if (typeof window === "undefined") return { ok: false, message: "localStorage tidak tersedia di server." }
+  return scheduleRoboflowWrite(payload)
+}
+
+export function updateRoboflowAdminStats(
+  updater: (prev: RoboflowAdminPersist | null) => RoboflowAdminPersist | null
+): { ok: true } | { ok: false; message: string } {
+  if (typeof window === "undefined") return { ok: false, message: "localStorage tidak tersedia di server." }
+  try {
+    const prev = readRoboflowAdminStats()
+    const next = updater(prev)
+    return scheduleRoboflowWrite(next)
+  } catch (err) {
+    return { ok: false, message: "Gagal mengupdate Roboflow admin stats." }
+  }
+}
+
+export function flushRoboflowAdminStatsToStorage(): { ok: true } | { ok: false; message: string } {
+  if (typeof window === "undefined") return { ok: false, message: "localStorage tidak tersedia di server." }
+  try {
+    const pending = (window as any).__roboflowAdminStatsPending as RoboflowAdminPersist | null
+    // clear timer if exists
+    const timer = (window as any).__roboflowAdminStatsTimer as number | undefined
+    if (timer) {
+      clearTimeout(timer)
+      ;(window as any).__roboflowAdminStatsTimer = undefined
+    }
+    ;(window as any).__roboflowAdminStatsPending = null
+    return immediateWriteRoboflowAdminStats(pending ?? null)
+  } catch {
+    return { ok: false, message: "Gagal flush Roboflow admin stats ke storage." }
+  }
+}

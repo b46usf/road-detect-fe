@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:roboflow": "node scripts/sync-roboflow-stats.js"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",

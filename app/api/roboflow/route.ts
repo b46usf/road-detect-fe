@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { promises as fs } from "fs"
+import path from "path"
 import {
   ParsedPrediction,
   SeverityLevel,
@@ -338,6 +340,20 @@ async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unk
       globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
       globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
       console.warn("Roboflow API key validation failed", { status: resp.status, body })
+
+      // try persist stats to disk for durability (best-effort)
+      try {
+        const statsFile = path.join(process.cwd(), ".data", "roboflow-admin-stats.json")
+        await fs.mkdir(path.dirname(statsFile), { recursive: true })
+        const payload = {
+          stats: globalThis.__roboflowApiKeyValidationStats,
+          cache: globalThis.__roboflowApiKeyValidation ?? null,
+          updatedAt: Date.now()
+        }
+        await fs.writeFile(statsFile, JSON.stringify(payload, null, 2), "utf8")
+      } catch (err) {
+        /* ignore persistence errors */
+      }
     }
 
     return { ok, info: { status: resp.status, body } }
@@ -354,6 +370,20 @@ async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unk
     globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
     globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
     console.warn("Roboflow API key validation error", info)
+
+    try {
+      const statsFile = path.join(process.cwd(), ".data", "roboflow-admin-stats.json")
+      await fs.mkdir(path.dirname(statsFile), { recursive: true })
+      const payload = {
+        stats: globalThis.__roboflowApiKeyValidationStats,
+        cache: globalThis.__roboflowApiKeyValidation ?? null,
+        updatedAt: Date.now()
+      }
+      await fs.writeFile(statsFile, JSON.stringify(payload, null, 2), "utf8")
+    } catch (err) {
+      /* ignore persistence errors */
+    }
+
     return { ok: false, info }
   }
 }

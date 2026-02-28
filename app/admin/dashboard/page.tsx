@@ -14,9 +14,12 @@ import {
   readDetectionHistory,
   readGisMapSettings,
   writeGisMapSettings,
+  readRoboflowAdminStats,
+  updateRoboflowAdminStats,
   type AdminSession,
   type GisMapSettings,
-  type StoredDetectionRecord
+  type StoredDetectionRecord,
+  type RoboflowAdminPersist
 } from "@/lib/admin-storage"
 import { formatPercent, severityLabel, severityTone, boolLabel } from "@/lib/ui-utils"
 
@@ -64,8 +67,10 @@ export default function AdminDashboardPage() {
     try {
       const resp = await fetch("/api/admin/roboflow-stats", { cache: "no-store" })
       if (!resp.ok) {
-        setRfStats(null)
-        setRfCache(null)
+        // fallback to persisted local stats
+        const persisted = readRoboflowAdminStats()
+        setRfStats(persisted?.stats ?? null)
+        setRfCache(persisted?.cache ?? null)
         return
       }
 
@@ -73,10 +78,20 @@ export default function AdminDashboardPage() {
       if (json && json.ok) {
         setRfStats(json.stats ?? null)
         setRfCache(json.cache ?? null)
+        try {
+          updateRoboflowAdminStats(() => ({
+            stats: json.stats ?? null,
+            cache: json.cache ?? null,
+            updatedAt: new Date().toISOString()
+          } as RoboflowAdminPersist))
+        } catch {
+          // ignore persistence errors
+        }
       }
     } catch {
-      setRfStats(null)
-      setRfCache(null)
+      const persisted = readRoboflowAdminStats()
+      setRfStats(persisted?.stats ?? null)
+      setRfCache(persisted?.cache ?? null)
     }
   }, [])
 
