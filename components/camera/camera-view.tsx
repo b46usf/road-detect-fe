@@ -79,8 +79,8 @@ export default function CameraView(props: CameraViewProps) {
         <footer className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
           <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-3">
             <p>1. Pastikan browser sudah mendapat izin kamera.</p>
-            <p>2. Aktifkan izin lokasi agar GPS/GNSS ikut terkirim ke payload.</p>
-            <p>3. Inference di-throttle + resize frame untuk hemat quota.</p>
+            <p>2. Aktifkan izin lokasi GPS.</p>
+            <p>3. Inference di-throttle + resize frame.</p>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">

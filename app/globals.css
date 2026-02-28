@@ -25,3 +25,93 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.road-detect-pin-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.road-detect-pin {
+  position: relative;
+  margin: 0 auto;
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  border: 2px solid #f8fafc;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.45);
+}
+
+.road-detect-pin::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 9px solid currentColor;
+  filter: drop-shadow(0 6px 8px rgba(2, 6, 23, 0.4));
+}
+
+.road-detect-pin__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 5px;
+  width: 5px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: #f8fafc;
+}
+
+.road-detect-pin__label {
+  position: relative;
+  left: 50%;
+  margin-top: 12px;
+  display: inline-flex;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.82);
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.road-detect-pin--light {
+  color: #34d399;
+  background: #059669;
+}
+
+.road-detect-pin--medium {
+  color: #fbbf24;
+  background: #d97706;
+}
+
+.road-detect-pin--heavy {
+  color: #fb7185;
+  background: #be123c;
+}
+
+.road-detect-pin--unknown {
+  color: #94a3b8;
+  background: #475569;
+}
+
+.road-detect-map-tooltip {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.9);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.4);
+}
+
+.road-detect-map-tooltip.leaflet-tooltip-top::before {
+  border-top-color: rgba(2, 6, 23, 0.9);
+}

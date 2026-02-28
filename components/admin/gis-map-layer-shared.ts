@@ -8,6 +8,56 @@ export interface LeafletLayerState {
   wfs?: import("leaflet").GeoJSON
 }
 
+function severityToneClass(severity: string): string {
+  if (severity === "berat") {
+    return "road-detect-pin--heavy"
+  }
+
+  if (severity === "sedang") {
+    return "road-detect-pin--medium"
+  }
+
+  if (severity === "ringan") {
+    return "road-detect-pin--light"
+  }
+
+  return "road-detect-pin--unknown"
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
+export function buildDetectionPinIcon(
+  L: LeafletModule,
+  params: {
+    severity: string
+    label: string
+  }
+) {
+  const { severity, label } = params
+  const safeLabel = escapeHtml(label)
+
+  return L.divIcon({
+    className: "road-detect-pin-wrapper",
+    html: `
+      <div class="road-detect-pin ${severityToneClass(severity)}">
+        <span class="road-detect-pin__dot"></span>
+      </div>
+      <span class="road-detect-pin__label">${safeLabel}</span>
+    `,
+    iconSize: [30, 40],
+    iconAnchor: [15, 34],
+    tooltipAnchor: [0, -30],
+    popupAnchor: [0, -30]
+  })
+}
+
 export function severityColor(severity: string): string {
   if (severity === "berat") {
     return "#fb7185"

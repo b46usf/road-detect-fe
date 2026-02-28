@@ -55,24 +55,24 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <article className="rounded-xl border border-white/10 bg-black/35 p-3">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <article className="h-full rounded-xl border border-white/10 bg-black/35 p-3">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Total Record</p>
           <p className="mt-1 text-xl font-semibold">{stats.total}</p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-black/35 p-3">
+        <article className="h-full rounded-xl border border-white/10 bg-black/35 p-3">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Rata Luasan</p>
           <p className="mt-1 text-xl font-semibold">{formatPercent(stats.avgDamage)}</p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-black/35 p-3">
+        <article className="h-full rounded-xl border border-white/10 bg-black/35 p-3">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Kasus Berat</p>
           <p className="mt-1 text-xl font-semibold">{stats.heavyCount}</p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-black/35 p-3">
+        <article className="h-full rounded-xl border border-white/10 bg-black/35 p-3">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Data Dengan GPS</p>
           <p className="mt-1 text-xl font-semibold">{stats.withGps}</p>
         </article>
-        <article className="rounded-xl border border-amber-200/10 bg-black/35 p-3">
+        <article className="h-full rounded-xl border border-amber-200/10 bg-black/35 p-3">
           <p className="text-[11px] uppercase tracking-wide text-amber-200/80">Roboflow Key Invalids</p>
           <p className="mt-1 text-xl font-semibold text-amber-200">
             {rfStats ? rfStats.invalidCount : "-"}

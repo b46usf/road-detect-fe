@@ -10,6 +10,7 @@ import {
   type DetectionFeatureCollection
 } from "@/lib/gis-pipeline"
 import {
+  buildDetectionPinIcon,
   removeLayer,
   severityColor,
   type LeafletLayerState,
@@ -66,16 +67,18 @@ export function useGisMapLayerEffects(args: UseGisMapLayerEffectsArgs) {
       return
     }
 
+    const showPermanentTags = detectionGeoJson.features.length <= 18
+
     const detectionLayer = L.geoJSON(detectionGeoJson as never, {
       pointToLayer: (feature, latlng) => {
-        const source = feature as unknown as { properties?: { tingkatKerusakan?: string } }
+        const source = feature as unknown as { properties?: { tingkatKerusakan?: string; id?: string } }
         const severity = source.properties?.tingkatKerusakan ?? "tidak-terdeteksi"
-        return L.circleMarker(latlng, {
-          radius: 6,
-          color: severityColor(severity),
-          fillColor: severityColor(severity),
-          fillOpacity: 0.65,
-          weight: 1.5
+        const shortLabel = source.properties?.id ? String(source.properties.id).slice(-4) : "GPS"
+        return L.marker(latlng, {
+          icon: buildDetectionPinIcon(L, {
+            severity,
+            label: shortLabel
+          })
         })
       },
       onEachFeature: (feature, layer) => {
@@ -87,6 +90,9 @@ export function useGisMapLayerEffects(args: UseGisMapLayerEffectsArgs) {
             dominantClass?: string | null
             waktuDeteksi?: string
           }
+          geometry?: {
+            coordinates?: unknown
+          }
         }
 
         const properties = source.properties
@@ -96,16 +102,42 @@ export function useGisMapLayerEffects(args: UseGisMapLayerEffectsArgs) {
             ? properties.luasanKerusakanPercent
             : null
         const luasan = luasanValue !== null ? `${luasanValue.toFixed(1)}%` : "n/a"
+        const rawCoordinates = Array.isArray(source.geometry?.coordinates)
+          ? source.geometry?.coordinates
+          : null
+        const longitude = rawCoordinates && typeof rawCoordinates[0] === "number" ? rawCoordinates[0] : null
+        const latitude = rawCoordinates && typeof rawCoordinates[1] === "number" ? rawCoordinates[1] : null
+        const coordinateTag =
+          latitude !== null && longitude !== null
+            ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+            : "koordinat n/a"
+        const mapsUrl =
+          latitude !== null && longitude !== null
+            ? `https://www.google.com/maps?q=${latitude},${longitude}`
+            : null
 
         layer.bindPopup(
           [
             `<b>Deteksi #${properties?.id ?? "-"}</b>`,
-            `Severity: ${severity}`,
+            `<span style="color:${severityColor(severity)};">Severity: ${severity}</span>`,
             `Luasan: ${luasan}`,
             `Kelas Dominan: ${properties?.dominantClass ?? "n/a"}`,
-            `Waktu: ${properties?.waktuDeteksi ? new Date(properties.waktuDeteksi).toLocaleString("id-ID") : "n/a"}`
-          ].join("<br/>")
+            `Lokasi: ${coordinateTag}`,
+            `Waktu: ${properties?.waktuDeteksi ? new Date(properties.waktuDeteksi).toLocaleString("id-ID") : "n/a"}`,
+            mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noreferrer">Buka di Maps</a>` : ""
+          ]
+            .filter((line) => line.length > 0)
+            .join("<br/>")
         )
+
+        layer.bindTooltip(`📍 ${coordinateTag}`, {
+          permanent: showPermanentTags,
+          direction: "top",
+          offset: [0, -28],
+          className: "road-detect-map-tooltip",
+          opacity: 0.95,
+          sticky: true
+        })
       }
     })
 

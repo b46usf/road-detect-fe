@@ -34,7 +34,7 @@ export default function CameraStageCard(props: CameraStageCardProps) {
   return (
     <>
       <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/90">Live Detection</p>
             <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Deteksi Jalan Realtime</h1>
@@ -43,31 +43,50 @@ export default function CameraStageCard(props: CameraStageCardProps) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${cameraBadge.tone}`}>
-              {cameraBadge.label}
-            </span>
-            <span className="rounded-full border border-cyan-300/40 bg-cyan-400/15 px-3 py-1 text-xs font-medium text-cyan-100">
-              {inferenceStatusLabel}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${apiBadge.tone}`}>
-              {apiBadge.label}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${gpsBadge.tone}`}>
-              {gpsBadge.label}
-            </span>
-            <Link
-              href="/"
-              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 transition hover:bg-white/10"
-            >
-              Kembali
-            </Link>
-            <Link
-              href="/admin/dashboard"
-              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25"
-            >
-              Dashboard Admin
-            </Link>
+          <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Kontrol Cepat</p>
+
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-white/10 bg-black/35 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Kamera</p>
+                <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${cameraBadge.tone}`}>
+                  {cameraBadge.label}
+                </span>
+              </div>
+              <div className="rounded-lg border border-cyan-300/20 bg-black/35 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Deteksi</p>
+                <span className="mt-1 inline-flex rounded-full border border-cyan-300/40 bg-cyan-400/15 px-2 py-0.5 text-[11px] font-medium text-cyan-100">
+                  {inferenceStatusLabel}
+                </span>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/35 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">API</p>
+                <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${apiBadge.tone}`}>
+                  {apiBadge.label}
+                </span>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/35 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">GPS</p>
+                <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${gpsBadge.tone}`}>
+                  {gpsBadge.label}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              <Link
+                href="/admin/dashboard"
+                className="inline-flex items-center justify-center rounded-lg border border-cyan-300/40 bg-cyan-400/20 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/30"
+              >
+                Buka Dashboard Admin
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 transition hover:bg-white/10"
+              >
+                Kembali ke Beranda
+              </Link>
+            </div>
           </div>
         </div>
       </header>
