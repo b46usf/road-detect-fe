@@ -4,8 +4,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FormEvent, useEffect, useState } from "react"
 import {
-  ADMIN_DEFAULT_PASSWORD,
-  ADMIN_DEFAULT_USERNAME,
   readAdminSession,
   validateAdminCredentials,
   writeAdminSession

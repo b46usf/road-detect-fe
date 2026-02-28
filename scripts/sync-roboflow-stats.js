@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /*
  Simple sync script: read .data/roboflow-admin-stats.json and POST it to
  a configured endpoint (SYNC_ROBOFLOW_ENDPOINT). Use header

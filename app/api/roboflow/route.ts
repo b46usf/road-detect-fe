@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
 import {
-  ParsedPrediction,
-  SeverityLevel,
-  DominantSeverity,
-  normalizePredictions,
-  classifySeverity,
   buildDamageSummary,
-} from "../../../lib/roboflow-utils"
-import { toFiniteNumber, readString, normalizeImageInput, parseDetectedAt, parseLocation, extractMimeFromDataUrl } from "../../../lib/common-utils"
-import { parseVisualEvidence } from "../../../lib/roboflow-utils"
-import { extractUpstreamMessage, translateUpstreamMessage } from "../../../lib/roboflow-client"
+  normalizePredictions,
+  parseVisualEvidence
+} from "@/lib/roboflow-utils"
+import {
+  normalizeImageInput,
+  parseDetectedAt,
+  parseLocation,
+  readString,
+  toFiniteNumber
+} from "@/lib/common-utils"
+import { extractUpstreamMessage, translateUpstreamMessage } from "@/lib/roboflow-client"
+import { requireRoboflowEndpointSecret } from "@/lib/server/roboflow-endpoint-auth"
+import { buildRoboflowPath } from "@/lib/server/roboflow-model-path"
+import { applyRoboflowRateLimit } from "@/lib/server/roboflow-rate-limit"
+import { validateRoboflowApiKey } from "@/lib/server/roboflow-api-key-validation"
+import {
+  forwardInferenceToRoboflow,
+  isOriginAllowed,
+  parseOptionalNumber
+} from "@/lib/server/roboflow-inference-request"
 
 interface InferRequestBody {
   image?: unknown
@@ -26,135 +35,8 @@ interface InferRequestBody {
   evidence?: unknown
 }
 
-interface RateLimitRecord {
-  windowStart: number
-  count: number
-  lastRequestAt: number
-}
-
-interface ReportLocation {
-  latitude: number
-  longitude: number
-  accuracy: number | null
-  altitude: number | null
-  heading: number | null
-  speed: number | null
-  timestamp: string | null
-  source: string
-}
-
-interface ReportVisualEvidence {
-  imageDataUrl: string | null
-  mime: string
-  quality: number | null
-  resolusiCapture: {
-    width: number | null
-    height: number | null
-  }
-  resolusiSource: {
-    width: number | null
-    height: number | null
-  }
-  isFhdSource: boolean | null
-}
-
-declare global {
-  var __roboflowRateLimitStore: Map<string, RateLimitRecord> | undefined
-}
-
-const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX_REQUESTS = 30
-const RATE_LIMIT_MIN_INTERVAL_MS = 1_500
-const RATE_LIMIT_MAX_RECORDS = 1_000
-// API key validation TTL (ms). Can be overridden with env `ROBOFLOW_API_KEY_VALIDATION_TTL_MS`.
-const API_KEY_VALIDATION_TTL_MS = Number(process.env.ROBOFLOW_API_KEY_VALIDATION_TTL_MS) || 60_000 // default 1 minute
 const MAX_IMAGE_BASE64_LENGTH = 1_500_000
 const VALID_FETCH_SITES = new Set(["same-origin", "same-site", "none"])
-
-// severity thresholds are defined in lib/roboflow-utils
-
-const rateLimitStore =
-  globalThis.__roboflowRateLimitStore ?? (globalThis.__roboflowRateLimitStore = new Map())
-
-function parseOptionalNumber(value: unknown): string | null | "invalid" {
-  if (value === undefined || value === null) {
-    return null
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? String(value) : "invalid"
-  }
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? String(parsed) : "invalid"
-  }
-
-  return "invalid"
-}
-
-// primitive helpers (toFiniteNumber, normalizeImageInput, readString)
-// are imported from lib/common-utils
-
-function splitModelIdSegments(rawModelId: string): string[] {
-  const normalized = rawModelId
-    .trim()
-    .replace(/^https?:\/\/detect\.roboflow\.com\//i, "")
-    .replace(/^\/+|\/+$/g, "")
-
-  if (!normalized) {
-    return []
-  }
-
-  return normalized
-    .split("/")
-    .map((segment) => {
-      const cleaned = segment.trim()
-      if (!cleaned) {
-        return ""
-      }
-
-      try {
-        return decodeURIComponent(cleaned).trim()
-      } catch {
-        return cleaned
-      }
-    })
-    .filter((segment) => segment.length > 0)
-}
-
-function buildRoboflowPath(
-  modelId: string,
-  modelVersion: string
-): { path: string; normalizedModelId: string } | null {
-  const normalizedVersion = modelVersion.trim()
-  if (!normalizedVersion) {
-    return null
-  }
-
-  const segments = splitModelIdSegments(modelId)
-  if (segments.length === 0) {
-    return null
-  }
-
-  const lastSegment = segments[segments.length - 1]
-  if (lastSegment === normalizedVersion) {
-    segments.pop()
-  }
-
-  if (segments.length === 0) {
-    return null
-  }
-
-  const encodedPath = [...segments.map((segment) => encodeURIComponent(segment)), encodeURIComponent(normalizedVersion)].join("/")
-  return {
-    path: encodedPath,
-    normalizedModelId: segments.join("/")
-  }
-}
-
-// `extractUpstreamMessage` and `translateUpstreamMessage` are implemented
-// in `lib/roboflow-client.ts` and imported above for reuse.
 
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json(
@@ -179,259 +61,17 @@ function jsonSuccess(data: unknown, message: string, meta?: Record<string, unkno
   })
 }
 
-function buildClientKey(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for")
-  const ipFromForwarded = forwardedFor ? forwardedFor.split(",")[0]?.trim() : ""
-  const ip = ipFromForwarded || readString(request.headers.get("x-real-ip")) || "unknown"
-  const userAgent = readString(request.headers.get("user-agent")).slice(0, 100) || "ua"
-  return `${ip}:${userAgent}`
-}
-
-function cleanRateLimitStore(now: number) {
-  if (rateLimitStore.size <= RATE_LIMIT_MAX_RECORDS) {
-    return
-  }
-
-  for (const [key, record] of rateLimitStore.entries()) {
-    if (now - record.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
-      rateLimitStore.delete(key)
-    }
-  }
-}
-
-function applyRateLimit(request: Request):
-  | { ok: true }
-  | { ok: false; response: ReturnType<typeof jsonError> } {
-  const now = Date.now()
-  const key = buildClientKey(request)
-  const record = rateLimitStore.get(key)
-
-  if (!record) {
-    rateLimitStore.set(key, {
-      windowStart: now,
-      count: 1,
-      lastRequestAt: now
-    })
-    cleanRateLimitStore(now)
-    return { ok: true }
-  }
-
-  if (now - record.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    record.windowStart = now
-    record.count = 0
-  }
-
-  const deltaFromLastRequest = now - record.lastRequestAt
-  if (deltaFromLastRequest < RATE_LIMIT_MIN_INTERVAL_MS) {
-    return {
-      ok: false,
-      response: jsonError(
-        429,
-        "RATE_LIMIT_THROTTLED",
-        `Request terlalu cepat. Minimal interval ${RATE_LIMIT_MIN_INTERVAL_MS}ms.`,
-        {
-          retryAfterMs: RATE_LIMIT_MIN_INTERVAL_MS - deltaFromLastRequest
-        }
-      )
-    }
-  }
-
-  record.count += 1
-  record.lastRequestAt = now
-
-  if (record.count > RATE_LIMIT_MAX_REQUESTS) {
-    return {
-      ok: false,
-      response: jsonError(
-        429,
-        "RATE_LIMIT_EXCEEDED",
-        `Batas request per menit terlampaui (${RATE_LIMIT_MAX_REQUESTS}/menit).`,
-        {
-          retryAfterMs: Math.max(0, RATE_LIMIT_WINDOW_MS - (now - record.windowStart))
-        }
-      )
-    }
-  }
-
-  cleanRateLimitStore(now)
-  return { ok: true }
-}
-
-function isOriginAllowed(request: Request): boolean {
-  const origin = readString(request.headers.get("origin"))
-  if (!origin) {
-    return true
-  }
-
-  const host = readString(request.headers.get("host"))
-  if (!host) {
-    return false
-  }
-
-  try {
-    const originUrl = new URL(origin)
-    // Normalize host and compare hostname (strip possible port from host header)
-    const hostOnly = host.split(":")[0]
-    if (originUrl.hostname === hostOnly || originUrl.host === host) {
-      return true
-    }
-  } catch {
-    return false
-  }
-
-  const rawAllowedOrigins = readString(process.env.ROBOFLOW_ALLOWED_ORIGINS)
-  if (!rawAllowedOrigins) {
-    return false
-  }
-
-  const allowedOrigins = rawAllowedOrigins
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-
-  return allowedOrigins.includes(origin)
-}
-
-// cache validation result in-memory to avoid frequent validation calls
-declare global {
-  var __roboflowApiKeyValidation: {
-    key: string
-    ok: boolean
-    expiresAt: number
-    info?: unknown
-  } | undefined
-
-  // simple in-memory stats for key validation failures
-  var __roboflowApiKeyValidationStats: {
-    invalidCount: number
-    lastInvalidAt?: number
-  } | undefined
-}
-
-async function validateApiKey(apiKey: string): Promise<{ ok: boolean; info?: unknown }> {
-  const now = Date.now()
-  const store = globalThis.__roboflowApiKeyValidation
-  if (store && store.key === apiKey && store.expiresAt > now) {
-    return { ok: store.ok, info: store.info }
-  }
-
-  try {
-    const url = `https://api.roboflow.com/?api_key=${encodeURIComponent(apiKey)}`
-    const resp = await fetch(url, { method: "GET", cache: "no-store" })
-    const text = await resp.text()
-    let body: unknown = { raw: text }
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = { raw: text }
-    }
-
-    const ok = resp.ok
-    globalThis.__roboflowApiKeyValidation = {
-      key: apiKey,
-      ok,
-      expiresAt: now + API_KEY_VALIDATION_TTL_MS,
-      info: { status: resp.status, body }
-    }
-
-    if (!ok) {
-      // increment simple in-memory metric
-      globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
-      globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
-      globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
-      console.warn("Roboflow API key validation failed", { status: resp.status, body })
-
-      // try persist stats to disk for durability (best-effort)
-      try {
-        const statsFile = path.join(process.cwd(), ".data", "roboflow-admin-stats.json")
-        await fs.mkdir(path.dirname(statsFile), { recursive: true })
-        const payload = {
-          stats: globalThis.__roboflowApiKeyValidationStats,
-          cache: globalThis.__roboflowApiKeyValidation ?? null,
-          updatedAt: Date.now()
-        }
-        await fs.writeFile(statsFile, JSON.stringify(payload, null, 2), "utf8")
-      } catch (err) {
-        /* ignore persistence errors */
-      }
-    }
-
-    return { ok, info: { status: resp.status, body } }
-  } catch (err) {
-    // network/other error when validating key - treat as invalid but include info
-    const info = { error: err instanceof Error ? err.message : String(err) }
-    globalThis.__roboflowApiKeyValidation = {
-      key: apiKey,
-      ok: false,
-      expiresAt: now + API_KEY_VALIDATION_TTL_MS,
-      info
-    }
-    globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
-    globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
-    globalThis.__roboflowApiKeyValidationStats.lastInvalidAt = now
-    console.warn("Roboflow API key validation error", info)
-
-    try {
-      const statsFile = path.join(process.cwd(), ".data", "roboflow-admin-stats.json")
-      await fs.mkdir(path.dirname(statsFile), { recursive: true })
-      const payload = {
-        stats: globalThis.__roboflowApiKeyValidationStats,
-        cache: globalThis.__roboflowApiKeyValidation ?? null,
-        updatedAt: Date.now()
-      }
-      await fs.writeFile(statsFile, JSON.stringify(payload, null, 2), "utf8")
-    } catch (err) {
-      /* ignore persistence errors */
-    }
-
-    return { ok: false, info }
-  }
-}
-
-// `parseDetectedAt` implemented in lib/common-utils
-
-// parseLocation and parseVisualEvidence are centralized in lib/common-utils and lib/roboflow-utils
-  // prediction normalization and damage-summary helpers are provided by lib/roboflow-utils
-
 export async function POST(request: Request) {
   const startedAt = Date.now()
+
   const apiKey = process.env.ROBOFLOW_API_KEY
   if (!apiKey) {
     return jsonError(500, "ENV_MISSING", "ROBOFLOW_API_KEY belum diset di environment server.")
   }
 
-  // Option to skip API key validation via env (set to 'true' to skip)
-  const skipValidationEnv = readString(process.env.ROBOFLOW_SKIP_KEY_VALIDATION)
-  const skipKeyValidation = skipValidationEnv === "true"
-
-  if (!skipKeyValidation) {
-    // validate API key with upstream Roboflow before attempting inference
-    const keyValidation = await validateApiKey(apiKey)
-    if (!keyValidation.ok) {
-      const upstreamMessage = keyValidation.info ?? null
-      // record quick metric available on global
-      globalThis.__roboflowApiKeyValidationStats = globalThis.__roboflowApiKeyValidationStats ?? { invalidCount: 0 }
-      globalThis.__roboflowApiKeyValidationStats.invalidCount += 1
-
-      return jsonError(
-        401,
-        "INVALID_API_KEY",
-        "ROBOFLOW_API_KEY tidak valid atau tidak dapat diverifikasi.",
-        {
-          upstream: upstreamMessage
-        }
-      )
-    }
-  } else {
-    console.info("Skipping Roboflow API key validation via ROBOFLOW_SKIP_KEY_VALIDATION")
-  }
-
-  const endpointSecret = readString(process.env.ROBOFLOW_ENDPOINT_SECRET)
-  if (endpointSecret) {
-    const incomingSecret = readString(request.headers.get("x-roboflow-endpoint-secret"))
-    if (!incomingSecret || incomingSecret !== endpointSecret) {
-      return jsonError(401, "UNAUTHORIZED", "Akses endpoint ditolak.")
-    }
+  const unauthorized = requireRoboflowEndpointSecret(request)
+  if (unauthorized) {
+    return unauthorized
   }
 
   const contentType = readString(request.headers.get("content-type")).toLowerCase()
@@ -448,9 +88,24 @@ export async function POST(request: Request) {
     return jsonError(403, "ORIGIN_NOT_ALLOWED", "Origin request tidak diizinkan.")
   }
 
-  const rateLimitResult = applyRateLimit(request)
-  if (!rateLimitResult.ok) {
-    return rateLimitResult.response
+  const rateLimit = applyRoboflowRateLimit(request)
+  if (!rateLimit.ok) {
+    return jsonError(rateLimit.status, rateLimit.code, rateLimit.message, rateLimit.details)
+  }
+
+  const skipValidationEnv = readString(process.env.ROBOFLOW_SKIP_KEY_VALIDATION)
+  if (skipValidationEnv !== "true") {
+    const validation = await validateRoboflowApiKey(apiKey)
+    if (!validation.ok) {
+      return jsonError(
+        401,
+        "INVALID_API_KEY",
+        "ROBOFLOW_API_KEY tidak valid atau tidak dapat diverifikasi.",
+        { upstream: validation.info ?? null }
+      )
+    }
+  } else {
+    console.info("Skipping Roboflow API key validation via ROBOFLOW_SKIP_KEY_VALIDATION")
   }
 
   let payload: InferRequestBody
@@ -462,8 +117,7 @@ export async function POST(request: Request) {
 
   const imageInput = readString(payload.image)
   const modelId = readString(payload.modelId) || readString(process.env.ROBOFLOW_MODEL_ID)
-  const modelVersion =
-    readString(payload.modelVersion) || readString(process.env.ROBOFLOW_MODEL_VERSION)
+  const modelVersion = readString(payload.modelVersion) || readString(process.env.ROBOFLOW_MODEL_VERSION)
 
   if (!imageInput) {
     return jsonError(400, "IMAGE_REQUIRED", "Field `image` wajib diisi (base64/data URL).")
@@ -495,22 +149,15 @@ export async function POST(request: Request) {
     })
   }
 
-  // Validate base64 payload early to provide clearer error messages
   try {
-    const buf = Buffer.from(cleanedBase64, "base64")
-    // round-trip check (ignore padding differences)
-    const reencoded = buf.toString("base64").replace(/=+$/, "")
+    const buffer = Buffer.from(cleanedBase64, "base64")
+    const reencoded = buffer.toString("base64").replace(/=+$/, "")
     const originalNoPad = cleanedBase64.replace(/=+$/, "")
-    if (buf.length === 0 || reencoded !== originalNoPad) {
+
+    if (buffer.length === 0 || reencoded !== originalNoPad) {
       throw new Error("invalid base64 payload")
     }
-  } catch (err) {
-    console.error("Invalid base64 image for Roboflow request", {
-      length: cleanedBase64.length,
-      head: cleanedBase64.slice(0, 50),
-      tail: cleanedBase64.slice(-50)
-    })
-
+  } catch {
     return jsonError(400, "INVALID_BASE64", "Field `image` berisi base64 tidak valid atau korup.")
   }
 
@@ -538,112 +185,35 @@ export async function POST(request: Request) {
 
   const roboflowUrl = `https://detect.roboflow.com/${builtPath.path}?${query.toString()}`
 
-  // use multipart/form-data to avoid issues with url-encoding of base64
-  // build FormData at time of request so it is only created when needed
-
   try {
-    const form = new FormData()
-    const mime = extractMimeFromDataUrl(imageInput) || "image/jpeg"
-    const fileBuffer = Buffer.from(cleanedBase64, "base64")
-
-    // Prefer appending as a binary file in part named 'file' (what Roboflow expects).
-    // Try Blob first (Web FormData), fallback to Buffer append for Node runtimes.
-    try {
-      // @ts-ignore Blob may exist in the runtime
-      const blob = new Blob([fileBuffer], { type: mime })
-      // append with filename so upstream treats it as a file
-      // @ts-ignore some FormData implementations accept third filename arg
-      form.append("file", blob, "upload.jpg")
-    } catch (err) {
-      try {
-        // @ts-ignore Node/undici FormData may accept Buffer + filename
-        form.append("file", fileBuffer, "upload.jpg")
-      } catch (err2) {
-        // last resort: append base64 string under field 'file'
-        form.append("file", cleanedBase64)
-      }
-    }
-
-    const roboflowResponse = await fetch(roboflowUrl, {
-      method: "POST",
-      // intentionally omit Content-Type so the runtime sets multipart boundary
-      body: form,
-      cache: "no-store"
+    const upstream = await forwardInferenceToRoboflow({
+      roboflowUrl,
+      cleanedBase64,
+      imageInput
     })
 
-    let responseText: string = await roboflowResponse.text()
-    let responseData: unknown = { raw: responseText }
-    try {
-      responseData = JSON.parse(responseText)
-    } catch {
-      responseData = { raw: responseText }
-    }
-
-    if (!roboflowResponse.ok) {
-      // coba fallback GET apabila server mengatakan method tidak diijinkan.
-        if (roboflowResponse.status === 405) {
-        try {
-          const fallbackUrl = `${roboflowUrl}&image=${encodeURIComponent(cleanedBase64)}`
-          const getResp = await fetch(fallbackUrl, { method: "GET", cache: "no-store" })
-          if (getResp.ok) {
-            // berhasil pada GET, gunakan respons ini sebagai hasil akhir
-            responseText = await getResp.text()
-            responseData = (() => {
-              try {
-                return JSON.parse(responseText)
-              } catch {
-                return { raw: responseText }
-              }
-            })()
-            // lanjut ke pemrosesan sukses setelah if-block
-          } else {
-            // tetap 405 atau error lain, teruskan penanganan normal
-            const upstreamMessageRaw = extractUpstreamMessage(responseData)
-            const upstreamMessage = upstreamMessageRaw
-              ? translateUpstreamMessage(upstreamMessageRaw)
-              : null
-
-            return jsonError(
-              getResp.status,
-              "UPSTREAM_HTTP_ERROR",
-              upstreamMessage
-                ? `Request ke Roboflow gagal: ${upstreamMessage}`
-                : "Request ke Roboflow gagal.",
-              {
-                upstreamStatus: getResp.status,
-                upstreamMessage: upstreamMessageRaw ?? null,
-                upstreamBody: responseData
-              }
-            )
-          }
-        } catch {
-          // jatuhkan ke blok bawah untuk melaporkan 405 asli
-        }
-      }
-
-      const upstreamMessageRaw = extractUpstreamMessage(responseData)
-      const upstreamMessage = upstreamMessageRaw
-        ? translateUpstreamMessage(upstreamMessageRaw)
-        : null
+    if (!upstream.ok) {
+      const upstreamMessageRaw = extractUpstreamMessage(upstream.responseData)
+      const upstreamMessage = upstreamMessageRaw ? translateUpstreamMessage(upstreamMessageRaw) : null
 
       return jsonError(
-        roboflowResponse.status,
+        upstream.status,
         "UPSTREAM_HTTP_ERROR",
         upstreamMessage
           ? `Request ke Roboflow gagal: ${upstreamMessage}`
           : "Request ke Roboflow gagal.",
         {
-          upstreamStatus: roboflowResponse.status,
+          upstreamStatus: upstream.status,
           upstreamMessage: upstreamMessageRaw ?? null,
-          upstreamBody: responseData
+          upstreamBody: upstream.responseData
         }
       )
     }
 
     const inferenceObject =
-      responseData && typeof responseData === "object"
-        ? (responseData as Record<string, unknown>)
-        : ({ raw: responseData } as Record<string, unknown>)
+      upstream.responseData && typeof upstream.responseData === "object"
+        ? (upstream.responseData as Record<string, unknown>)
+        : ({ raw: upstream.responseData } as Record<string, unknown>)
 
     const responseImage = inferenceObject.image
     const responseImageObject =

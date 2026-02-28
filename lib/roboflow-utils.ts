@@ -20,6 +20,21 @@ export interface ClassSummaryAccumulator {
   }
 }
 
+export interface ParsedVisualEvidence {
+  imageDataUrl: string | null
+  mime: string
+  quality: number | null
+  resolusiCapture: {
+    width: number | null
+    height: number | null
+  }
+  resolusiSource: {
+    width: number | null
+    height: number | null
+  }
+  isFhdSource: boolean | null
+}
+
 export const LIGHT_SEVERITY_MAX_PERCENT = 1.5
 export const MEDIUM_SEVERITY_MAX_PERCENT = 4
 
@@ -38,10 +53,10 @@ export function normalizePredictions(rawPredictions: unknown): ParsedPrediction[
     const source = item as Record<string, unknown>
     const rawLabel = typeof source.class === "string" ? source.class.trim() : ""
     const label = rawLabel.length > 0 ? rawLabel : "objek"
-    const width = typeof source.width === "number" ? source.width : Number(source.width as any)
-    const height = typeof source.height === "number" ? source.height : Number(source.height as any)
+    const width = toFiniteNumber(source.width)
+    const height = toFiniteNumber(source.height)
 
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    if (width === null || height === null || width <= 0 || height <= 0) {
       continue
     }
 
@@ -256,7 +271,7 @@ export function parseVisualEvidence(
   rawImageInput: string,
   fallbackCaptureWidth: number | null,
   fallbackCaptureHeight: number | null
-): any {
+): ParsedVisualEvidence {
   const source = evidenceValue && typeof evidenceValue === "object" ? (evidenceValue as Record<string, unknown>) : {}
 
   const captureWidth = toFiniteNumber(source.captureWidth ?? source.frameWidth) ?? fallbackCaptureWidth
