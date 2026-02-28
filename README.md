@@ -72,7 +72,7 @@ npm run start
 - `ROBOFLOW_MODEL_VERSION` : model version default.
 - `ROBOFLOW_ENDPOINT_SECRET` : secret header `x-roboflow-endpoint-secret` untuk endpoint admin/server.
 - `SYNC_ROBOFLOW_ENDPOINT` : endpoint tujuan sinkronisasi dari Actions.
-- `SYNC_ROBOFLOW_SECRET` : secret yang dikirim Action pada header `x-roboflow-endpoint-secret`.
+- `SYNC_ROBOFLOW_SECRET` : legacy fallback (deprecated), gunakan `ROBOFLOW_ENDPOINT_SECRET`.
 
 ## Setup Secrets (Langkah Ringkas)
 
@@ -88,13 +88,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 2. Tambahkan GitHub Actions secrets:
 - `SYNC_ROBOFLOW_ENDPOINT` = `https://<your-domain>/api/admin/roboflow-stats`
-- `SYNC_ROBOFLOW_SECRET` = `<SECRET_DARI_LANGKAH_1>`
+- `ROBOFLOW_ENDPOINT_SECRET` = `<SECRET_DARI_LANGKAH_1>`
+- `SYNC_ROBOFLOW_SECRET` (opsional, legacy fallback jika secret baru belum diisi)
 
 3. Tambahkan environment variables di hosting (mis. Vercel):
 - `ROBOFLOW_API_KEY`
 - `ROBOFLOW_MODEL_ID`
 - `ROBOFLOW_MODEL_VERSION`
-- `ROBOFLOW_ENDPOINT_SECRET` (harus sama dengan `SYNC_ROBOFLOW_SECRET`)
+- `ROBOFLOW_ENDPOINT_SECRET`
 
 4. Uji endpoint (opsional):
 

@@ -3,7 +3,8 @@
 /*
  Simple sync script: read .data/roboflow-admin-stats.json and POST it to
  a configured endpoint (SYNC_ROBOFLOW_ENDPOINT). Use header
- `x-roboflow-endpoint-secret` with `SYNC_ROBOFLOW_SECRET` if present.
+ `x-roboflow-endpoint-secret` with `ROBOFLOW_ENDPOINT_SECRET`.
+ Legacy fallback: `SYNC_ROBOFLOW_SECRET`.
 
  Usage:
    node scripts/sync-roboflow-stats.js [--dry-run]
@@ -13,6 +14,20 @@
 
 const fs = require('fs').promises
 const path = require('path')
+
+function readEnvString(value) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : ''
+}
+
+function resolveSyncSecret(env = process.env) {
+  const primarySecret = readEnvString(env.ROBOFLOW_ENDPOINT_SECRET)
+  if (primarySecret) {
+    return { secret: primarySecret, fromLegacy: false }
+  }
+
+  const legacySecret = readEnvString(env.SYNC_ROBOFLOW_SECRET)
+  return { secret: legacySecret, fromLegacy: Boolean(legacySecret) }
+}
 
 async function main() {
   const args = process.argv.slice(2)
@@ -25,15 +40,21 @@ async function main() {
     console.log('Loaded stats:', parsed)
 
     const endpoint = process.env.SYNC_ROBOFLOW_ENDPOINT
-    const secret = process.env.SYNC_ROBOFLOW_SECRET
+    const { secret, fromLegacy } = resolveSyncSecret()
+
+    if (fromLegacy) {
+      console.warn(
+        '[DEPRECATED] SYNC_ROBOFLOW_SECRET is deprecated. Please set ROBOFLOW_ENDPOINT_SECRET.'
+      )
+    }
 
     if (!endpoint) {
-      console.log('No SYNC_ROBOFLOW_ENDPOINT configured — nothing to POST. Exiting.')
+      console.log('No SYNC_ROBOFLOW_ENDPOINT configured - nothing to POST. Exiting.')
       return
     }
 
     if (dry) {
-      console.log('Dry run enabled — would POST to', endpoint)
+      console.log('Dry run enabled - would POST to', endpoint)
       return
     }
 
@@ -63,7 +84,7 @@ async function main() {
     console.log('Sync successful:', text)
   } catch (err) {
     if (err && err.code === 'ENOENT') {
-      console.log('No stats file found at .data/roboflow-admin-stats.json — nothing to sync.')
+      console.log('No stats file found at .data/roboflow-admin-stats.json - nothing to sync.')
       return
     }
     console.error('Error during sync:', err)
@@ -72,3 +93,4 @@ async function main() {
 }
 
 main()
+

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { readString } from "@/lib/common-utils"
+import { resolveRoboflowEndpointSecret } from "@/lib/server/roboflow-endpoint-secret"
 
 export function requireRoboflowEndpointSecret(request: Request): NextResponse | null {
-  const endpointSecret = readString(process.env.ROBOFLOW_ENDPOINT_SECRET)
+  const endpointSecret = resolveRoboflowEndpointSecret()
   if (!endpointSecret) {
     return null
   }

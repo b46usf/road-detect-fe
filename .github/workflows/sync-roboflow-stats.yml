@@ -24,5 +24,5 @@ jobs:
       - name: Run Roboflow stats sync
         env:
           SYNC_ROBOFLOW_ENDPOINT: ${{ secrets.SYNC_ROBOFLOW_ENDPOINT }}
-          SYNC_ROBOFLOW_SECRET: ${{ secrets.SYNC_ROBOFLOW_SECRET }}
+          ROBOFLOW_ENDPOINT_SECRET: ${{ secrets.ROBOFLOW_ENDPOINT_SECRET || secrets.SYNC_ROBOFLOW_SECRET }}
         run: npm run sync:roboflow
