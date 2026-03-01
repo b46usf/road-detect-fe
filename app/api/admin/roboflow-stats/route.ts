@@ -7,7 +7,7 @@ import {
 } from "@/lib/server/roboflow-admin-state"
 
 export async function GET(request: Request) {
-  const unauthorized = requireRoboflowEndpointSecret(request)
+  const unauthorized = requireRoboflowEndpointSecret(request, { allowTrustedClientRequest: true })
   if (unauthorized) {
     return unauthorized
   }

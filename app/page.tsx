@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 import type { Metadata } from "next"
 import {
+  ROADSTER_EXPANDED_NAME,
   ROADSTER_FULL_NAME,
   ROADSTER_HOME_DESCRIPTION,
   ROADSTER_LOGO_ALT,
@@ -51,9 +52,13 @@ export default function Home() {
             {ROADSTER_NAME}
           </p>
 
-          <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">
-            {ROADSTER_FULL_NAME}
+          <h1 className="max-w-3xl text-5xl font-bold leading-none tracking-tight sm:text-6xl md:text-7xl">
+            {ROADSTER_NAME}
           </h1>
+
+          <p className="max-w-3xl text-sm leading-relaxed text-cyan-100/90 sm:text-base md:text-lg">
+            {ROADSTER_EXPANDED_NAME}
+          </p>
 
           <p className="max-w-2xl text-base text-slate-300 md:text-lg">
             {ROADSTER_HOME_DESCRIPTION}

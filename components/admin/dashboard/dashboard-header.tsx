@@ -1,6 +1,7 @@
 import Image from "next/image"
 import {
   ROADSTER_ADMIN_DESCRIPTION,
+  ROADSTER_EXPANDED_NAME,
   ROADSTER_LOGO_ALT,
   ROADSTER_LOGO_PATH,
   ROADSTER_NAME
@@ -38,9 +39,14 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
               height={16}
               className="h-4 w-4 rounded-sm object-cover"
             />
-            {ROADSTER_NAME} Admin
+            Admin Module
           </p>
-          <h1 className="mt-1 text-2xl font-semibold">Monitoring Deteksi + GIS Dashboard</h1>
+          <h1 className="mt-1 text-3xl font-bold leading-none tracking-tight sm:text-4xl">
+            {ROADSTER_NAME}
+          </h1>
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-cyan-100/90 sm:text-sm md:text-base">
+            {ROADSTER_EXPANDED_NAME}
+          </p>
           <p className="mt-2 text-sm text-slate-300">
             {ROADSTER_ADMIN_DESCRIPTION}
           </p>

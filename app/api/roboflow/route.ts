@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     return jsonError(500, "ENV_MISSING", "ROBOFLOW_API_KEY belum diset di environment server.")
   }
 
-  const unauthorized = requireRoboflowEndpointSecret(request)
+  const unauthorized = requireRoboflowEndpointSecret(request, { allowTrustedClientRequest: true })
   if (unauthorized) {
     return unauthorized
   }

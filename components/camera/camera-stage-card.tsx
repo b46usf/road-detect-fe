@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 import {
   ROADSTER_CAMERA_DESCRIPTION,
+  ROADSTER_EXPANDED_NAME,
   ROADSTER_LOGO_ALT,
   ROADSTER_LOGO_PATH,
   ROADSTER_NAME
@@ -51,9 +52,17 @@ export default function CameraStageCard(props: CameraStageCardProps) {
                 height={16}
                 className="h-4 w-4 rounded-sm object-cover"
               />
-              {ROADSTER_NAME} Camera
+              Camera Module
             </p>
-            <h1 className="mt-1 text-xl font-semibold sm:text-2xl">Realtime Road Damage Detection</h1>
+
+            <h1 className="mt-1 text-3xl font-bold leading-none tracking-tight sm:text-4xl">
+              {ROADSTER_NAME}
+            </h1>
+
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-cyan-100/90 sm:text-sm md:text-base">
+              {ROADSTER_EXPANDED_NAME}
+            </p>
+
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
               {ROADSTER_CAMERA_DESCRIPTION}
             </p>

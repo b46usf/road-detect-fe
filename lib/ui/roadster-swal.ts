@@ -126,10 +126,10 @@ function buildDetectionResultHtml(record: StoredDetectionRecord): string {
   return `
     <section class="roadster-detection-modal">
       <header class="roadster-detection-header">
-        <div class="roadster-detection-icon">+</div>
+        <div class="roadster-detection-icon">AI</div>
         <div>
           <p class="roadster-detection-heading">AI Detection Result</p>
-          <p class="roadster-detection-subheading">Powered by YOLOv8 / Rapid Workflows</p>
+          <p class="roadster-detection-subheading">ROADSTER • YOLOv8 Rapid Workflows</p>
         </div>
       </header>
 

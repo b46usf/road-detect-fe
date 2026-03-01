@@ -120,11 +120,13 @@ body {
 .roadster-swal-popup {
   width: min(720px, calc(100vw - 24px));
   border-radius: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 100%);
-  color: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(6, 182, 212, 0.18) 0%, transparent 38%),
+    linear-gradient(165deg, #020617 0%, #0f172a 55%, #111827 100%);
+  color: #e2e8f0;
   padding: 14px 14px 12px;
-  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.62);
 }
 
 .roadster-swal-title {
@@ -132,13 +134,13 @@ body {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: #1e293b;
+  color: #f8fafc;
 }
 
 .roadster-swal-html {
   margin: 0;
   text-align: left;
-  color: #1e293b;
+  color: #e2e8f0;
 }
 
 .roadster-swal-confirm,
@@ -150,9 +152,9 @@ body {
 }
 
 .roadster-swal-confirm {
-  border: 1px solid rgba(8, 47, 73, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.45);
   background: linear-gradient(120deg, #06b6d4 0%, #38bdf8 100%);
-  color: #042f2e;
+  color: #032637;
 }
 
 .roadster-swal-confirm:hover {
@@ -160,13 +162,13 @@ body {
 }
 
 .roadster-swal-cancel {
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: rgba(15, 23, 42, 0.9);
+  color: #cbd5e1;
 }
 
 .roadster-swal-cancel:hover {
-  background: #f8fafc;
+  background: rgba(30, 41, 59, 0.95);
 }
 
 .roadster-detection-modal {
@@ -187,10 +189,12 @@ body {
   width: 44px;
   place-items: center;
   border-radius: 14px;
-  background: linear-gradient(130deg, #4f46e5 0%, #0ea5e9 100%);
-  color: #ffffff;
-  font-size: 20px;
+  border: 1px solid rgba(103, 232, 249, 0.35);
+  background: linear-gradient(130deg, #164e63 0%, #0e7490 100%);
+  color: #cffafe;
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .roadster-detection-heading {
@@ -198,13 +202,13 @@ body {
   font-size: 22px;
   line-height: 1.2;
   font-weight: 700;
-  color: #312e81;
+  color: #f8fafc;
 }
 
 .roadster-detection-subheading {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #4338ca;
+  color: #7dd3fc;
 }
 
 .roadster-detection-grid {
@@ -215,8 +219,8 @@ body {
 
 .roadster-detection-card {
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.72);
   padding: 12px;
 }
 
@@ -227,52 +231,57 @@ body {
 .roadster-detection-label {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .roadster-detection-value {
   margin: 8px 0 0;
-  font-size: 33px;
+  font-size: 29px;
   line-height: 1.2;
   font-weight: 700;
-  color: #0f172a;
+  color: #f8fafc;
 }
 
 .roadster-detection-value--accuracy {
-  color: #059669;
+  color: #34d399;
 }
 
 .roadster-detection-value--area {
-  color: #1d4ed8;
+  color: #7dd3fc;
 }
 
 .roadster-detection-value--light {
-  color: #047857;
+  color: #6ee7b7;
 }
 
 .roadster-detection-value--medium {
-  color: #b45309;
+  color: #fcd34d;
 }
 
 .roadster-detection-value--heavy {
-  color: #be123c;
+  color: #fda4af;
 }
 
 .roadster-detection-value--neutral {
-  color: #334155;
+  color: #cbd5e1;
 }
 
 .roadster-detection-value--recommendation {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
 }
 
 .roadster-detection-meta {
   display: grid;
+  margin-top: 2px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.58);
+  padding: 10px;
   gap: 4px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   font-size: 11px;
-  color: #475569;
+  color: #cbd5e1;
 }
 
 .roadster-detection-meta p {
@@ -317,7 +326,7 @@ body {
 
   .roadster-detection-value {
     margin-top: 6px;
-    font-size: 24px;
+    font-size: 23px;
   }
 
   .roadster-detection-value--recommendation {
@@ -326,5 +335,97 @@ body {
 
   .roadster-detection-meta {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .roadster-swal-popup {
+    width: calc(100vw - 12px);
+    border-radius: 14px;
+    padding: 8px 8px 7px;
+  }
+
+  .roadster-swal-title {
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+
+  .roadster-swal-html {
+    font-size: 12px;
+  }
+
+  .roadster-swal-popup .swal2-actions {
+    margin-top: 8px;
+    gap: 6px;
+  }
+
+  .roadster-swal-confirm,
+  .roadster-swal-cancel {
+    min-width: 0;
+    flex: 1 1 auto;
+    border-radius: 9px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .roadster-detection-modal {
+    gap: 7px;
+  }
+
+  .roadster-detection-header {
+    gap: 8px;
+  }
+
+  .roadster-detection-icon {
+    height: 30px;
+    width: 30px;
+    border-radius: 10px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .roadster-detection-heading {
+    font-size: 16px;
+  }
+
+  .roadster-detection-subheading {
+    margin-top: 1px;
+    font-size: 11px;
+  }
+
+  .roadster-detection-grid {
+    gap: 6px;
+  }
+
+  .roadster-detection-card {
+    border-radius: 12px;
+    padding: 8px;
+  }
+
+  .roadster-detection-label {
+    font-size: 11px;
+  }
+
+  .roadster-detection-value {
+    margin-top: 4px;
+    font-size: 19px;
+  }
+
+  .roadster-detection-value--recommendation {
+    font-size: 16px;
+  }
+
+  .roadster-detection-meta {
+    margin-top: 0;
+    border-radius: 10px;
+    padding: 8px;
+    gap: 3px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 320px) {
+  .roadster-detection-value {
+    font-size: 18px;
   }
 }
