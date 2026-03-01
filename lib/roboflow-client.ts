@@ -107,10 +107,39 @@ export function extractUpstreamMessage(payload: unknown): string | null {
 
   const source = payload as Record<string, unknown>
 
-  const candidates = [source.error, source.message, source.detail, source.reason]
+  const candidates = [source.error, source.message, source.reason, source.inner_error_message]
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim().length > 0) {
       return candidate.trim()
+    }
+  }
+
+  if (Array.isArray(source.detail) && source.detail.length > 0) {
+    const firstDetail = source.detail[0]
+    if (typeof firstDetail === "string" && firstDetail.trim().length > 0) {
+      return firstDetail.trim()
+    }
+
+    if (firstDetail && typeof firstDetail === "object") {
+      const firstDetailObject = firstDetail as Record<string, unknown>
+      const detailMessage =
+        typeof firstDetailObject.msg === "string" && firstDetailObject.msg.trim().length > 0
+          ? firstDetailObject.msg.trim()
+          : null
+
+      const detailLocation = Array.isArray(firstDetailObject.loc)
+        ? firstDetailObject.loc
+            .filter((segment): segment is string => typeof segment === "string" && segment.length > 0)
+            .join(".")
+        : ""
+
+      if (detailMessage && detailLocation) {
+        return `${detailMessage} (${detailLocation})`
+      }
+
+      if (detailMessage) {
+        return detailMessage
+      }
     }
   }
 

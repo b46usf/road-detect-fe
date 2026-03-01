@@ -83,7 +83,9 @@ export async function forwardInferenceToRoboflow(params: {
     },
     {
       api_key: apiKey,
-      image: cleanedBase64
+      inputs: {
+        image: imageInput
+      }
     }
   ]
 
