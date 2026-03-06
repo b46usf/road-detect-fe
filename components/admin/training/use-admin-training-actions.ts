@@ -76,7 +76,7 @@ export function useAdminTrainingActions(params: UseAdminTrainingActionsParams) {
     async (sampleId: string) => {
       const confirmed = await confirmRoadsterAction({
         title: "Hapus sample training ini?",
-        text: "Image file di public/img/training dan metadata JSON akan dihapus permanen.",
+        text: "Image sample di storage server dan metadata training akan dihapus permanen.",
         confirmButtonText: "Ya, Hapus"
       })
       if (!confirmed) {

@@ -1,3 +1,4 @@
+import Link from "next/link"
 import type { RefObject } from "react"
 import CameraDetailPanel from "./camera-detail-panel"
 import CameraStageCard from "./camera-stage-card"
@@ -83,18 +84,24 @@ export default function CameraView(props: CameraViewProps) {
             <p>3. Inference di-throttle + resize frame.</p>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={props.startCamera}
-              className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
             >
               Muat Ulang Kamera
             </button>
+            <Link
+              href="/"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/25"
+            >
+              Kembali ke Beranda
+            </Link>
             <button
               type="button"
               onClick={props.handleStopCamera}
-              className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
             >
               Matikan Kamera
             </button>

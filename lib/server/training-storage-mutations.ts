@@ -35,7 +35,7 @@ export async function createTrainingSample(input: CreateTrainingSampleInput): Pr
     createdAt: now,
     updatedAt: now,
     filename,
-    publicImagePath: buildTrainingPublicImagePath(filename),
+    publicImagePath: buildTrainingPublicImagePath(id),
     mime,
     sizeBytes: imageBuffer.length,
     imageWidth,
@@ -61,7 +61,7 @@ export async function createTrainingSample(input: CreateTrainingSampleInput): Pr
       await writeStateToDisk(state)
     })
   } catch (error) {
-    await deleteTrainingImageFile(sample.publicImagePath).catch(() => undefined)
+    await deleteTrainingImageFile(sample).catch(() => undefined)
     throw error
   }
 
@@ -74,13 +74,13 @@ export async function deleteTrainingSampleById(id: string): Promise<boolean> {
     return false
   }
 
-  let deletedImagePath: string | null = null
+  let deletedSample: TrainingSample | null = null
   await withTrainingWriteLock(async () => {
     const state = await readStateFromDisk()
     const nextSamples = state.samples.filter((sample) => {
       const shouldKeep = sample.id !== normalizedId
       if (!shouldKeep) {
-        deletedImagePath = sample.publicImagePath
+        deletedSample = sample
       }
       return shouldKeep
     })
@@ -93,11 +93,11 @@ export async function deleteTrainingSampleById(id: string): Promise<boolean> {
     await writeStateToDisk(state)
   })
 
-  if (!deletedImagePath) {
+  if (!deletedSample) {
     return false
   }
 
-  await deleteTrainingImageFile(deletedImagePath)
+  await deleteTrainingImageFile(deletedSample)
   return true
 }
 

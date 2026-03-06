@@ -8,6 +8,7 @@ ROADSTER (ROAd Damage System TEchnology with AI Recognition) adalah aplikasi Nex
 - Endpoint `POST /api/roboflow` untuk meneruskan file gambar ke Roboflow.
 - Dashboard admin untuk riwayat deteksi, statistik API, dan konfigurasi GIS.
 - Modul admin training untuk kurasi sample, upload dataset, dan trigger training pipeline.
+- Image sample training disimpan di server data dir dan disajikan lewat route internal `/api/admin/training/sample-image`.
 - Penyimpanan lokal (localStorage) untuk history/metrics di sisi client.
 - Sinkronisasi statistik admin via script dan GitHub Actions berkala.
 
@@ -138,3 +139,4 @@ curl -sS -X POST \
 - Project ini berfokus pada workflow demo dan validasi fitur.
 - Untuk skala produksi, gunakan persistence backend/database dan observability yang lebih kuat.
 - Di Vercel, state file server sekarang memakai fallback `/tmp/roadster-fe-data`, jadi endpoint admin/inference tidak crash karena `mkdir /var/task/.data`. Ini tetap bersifat ephemeral dan bukan persistence permanen.
+- Sample image training tidak lagi ditulis ke `public/`. Untuk produksi serverless yang butuh durability lintas cold start/deploy, tetap lebih tepat pindah ke object storage/database eksternal.

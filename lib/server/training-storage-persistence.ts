@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { readString } from "@/lib/common-utils"
-import { getServerDataFilePath } from "@/lib/server/server-data-dir"
+import { getServerDataDirectory, getServerDataFilePath } from "@/lib/server/server-data-dir"
 import { normalizeTrainingAnnotations } from "@/lib/training-annotations"
 import {
   TRAINING_LABELS,
@@ -14,8 +14,8 @@ import {
   type TrainingSeverity
 } from "@/lib/training-types"
 
-const TRAINING_IMAGE_PUBLIC_SUBDIR = path.join("img", "training")
-const TRAINING_IMAGE_DIR = path.join(process.cwd(), "public", TRAINING_IMAGE_PUBLIC_SUBDIR)
+const TRAINING_IMAGE_ROUTE = "/api/admin/training/sample-image"
+const LEGACY_TRAINING_IMAGE_PUBLIC_SUBDIR = path.join("img", "training")
 const MAX_TRAINING_IMAGE_BYTES = 6_000_000
 
 const STATUS_SET = new Set<TrainingSampleStatus>(["queued", "uploading", "uploaded", "failed"])
@@ -24,6 +24,10 @@ const SEVERITY_SET = new Set<TrainingSeverity>(TRAINING_SEVERITIES)
 
 function getTrainingMetadataFilePath(): string {
   return getServerDataFilePath("training-samples.json")
+}
+
+function getTrainingImageDirectory(): string {
+  return path.join(getServerDataDirectory(), "training-images")
 }
 
 let writeQueue: Promise<void> = Promise.resolve()
@@ -38,7 +42,7 @@ export function withTrainingWriteLock<T>(task: () => Promise<T>): Promise<T> {
 }
 
 export async function ensureTrainingDirectories(): Promise<void> {
-  await fs.mkdir(TRAINING_IMAGE_DIR, { recursive: true })
+  await fs.mkdir(getTrainingImageDirectory(), { recursive: true })
   await fs.mkdir(path.dirname(getTrainingMetadataFilePath()), { recursive: true })
 }
 
@@ -78,9 +82,9 @@ function normalizeTrainingSample(value: unknown, index: number): TrainingSample 
   const nowIso = new Date().toISOString()
   const id = readString(source.id, `training-${Date.now()}-${index}`)
   const filename = readString(source.filename)
-  const publicImagePath = readString(source.publicImagePath)
+  const publicImagePath = readString(source.publicImagePath, buildTrainingPublicImagePath(id))
 
-  if (!filename || !publicImagePath) {
+  if (!filename) {
     return null
   }
 
@@ -182,11 +186,20 @@ export function parseTrainingImageDataUrl(dataUrl: string): { mime: string; imag
   return { mime, imageBuffer }
 }
 
-export function buildTrainingPublicImagePath(filename: string): string {
-  return `/${TRAINING_IMAGE_PUBLIC_SUBDIR.replace(/\\/g, "/")}/${filename}`
+export function buildTrainingPublicImagePath(sampleId: string): string {
+  return `${TRAINING_IMAGE_ROUTE}?id=${encodeURIComponent(sampleId)}`
 }
 
-export function resolveTrainingPublicPath(publicImagePath: string): string {
+function resolveTrainingImageFilePath(filename: string): string {
+  const imageRoot = path.resolve(getTrainingImageDirectory())
+  const absolutePath = path.resolve(imageRoot, filename)
+  if (!absolutePath.startsWith(imageRoot)) {
+    throw new Error("Nama file image tidak valid.")
+  }
+  return absolutePath
+}
+
+function resolveLegacyTrainingPublicPath(publicImagePath: string): string {
   const publicRoot = path.resolve(process.cwd(), "public")
   const cleaned = publicImagePath.replace(/^\/+/, "")
   const absolutePath = path.resolve(publicRoot, cleaned)
@@ -198,12 +211,35 @@ export function resolveTrainingPublicPath(publicImagePath: string): string {
 
 export async function writeTrainingImageFile(filename: string, imageBuffer: Buffer): Promise<void> {
   await ensureTrainingDirectories()
-  await fs.writeFile(path.join(TRAINING_IMAGE_DIR, filename), imageBuffer)
+  await fs.writeFile(resolveTrainingImageFilePath(filename), imageBuffer)
 }
 
-export async function deleteTrainingImageFile(publicImagePath: string): Promise<void> {
-  const absoluteImagePath = resolveTrainingPublicPath(publicImagePath)
-  await fs.unlink(absoluteImagePath).catch(() => undefined)
+function isLegacyTrainingPublicPath(publicImagePath: string): boolean {
+  return publicImagePath.startsWith(`/${LEGACY_TRAINING_IMAGE_PUBLIC_SUBDIR.replace(/\\/g, "/")}/`)
+}
+
+export async function readTrainingImageBuffer(
+  sample: Pick<TrainingSample, "filename" | "publicImagePath">
+): Promise<Buffer> {
+  try {
+    return await fs.readFile(resolveTrainingImageFilePath(sample.filename))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" || !isLegacyTrainingPublicPath(sample.publicImagePath)) {
+      throw error
+    }
+
+    return fs.readFile(resolveLegacyTrainingPublicPath(sample.publicImagePath))
+  }
+}
+
+export async function deleteTrainingImageFile(
+  sample: Pick<TrainingSample, "filename" | "publicImagePath">
+): Promise<void> {
+  await fs.unlink(resolveTrainingImageFilePath(sample.filename)).catch(() => undefined)
+
+  if (isLegacyTrainingPublicPath(sample.publicImagePath)) {
+    await fs.unlink(resolveLegacyTrainingPublicPath(sample.publicImagePath)).catch(() => undefined)
+  }
 }
 
 export async function readTrainingDatasetState(): Promise<TrainingDatasetState> {
@@ -218,7 +254,6 @@ export async function listTrainingSamples(): Promise<TrainingSample[]> {
 }
 
 export async function readTrainingImageAsDataUrl(sample: TrainingSample): Promise<string> {
-  const absoluteImagePath = resolveTrainingPublicPath(sample.publicImagePath)
-  const imageBuffer = await fs.readFile(absoluteImagePath)
+  const imageBuffer = await readTrainingImageBuffer(sample)
   return `data:${sample.mime};base64,${imageBuffer.toString("base64")}`
 }

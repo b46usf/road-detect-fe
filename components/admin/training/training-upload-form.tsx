@@ -131,7 +131,7 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
     <section className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
       <h2 className="text-lg font-semibold text-slate-100">Input Sample Training</h2>
       <p className="mt-1 text-sm text-slate-300">
-        Upload image dari lapangan ke folder `public/img/training` dan simpan metadata ke JSON.
+        Upload image ke storage server dan simpan metadata sample ke state training server.
       </p>
 
       <form className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]" onSubmit={submitForm}>

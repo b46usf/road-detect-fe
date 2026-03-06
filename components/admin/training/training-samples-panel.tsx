@@ -153,7 +153,8 @@ export default function TrainingSamplesPanel(props: TrainingSamplesPanelProps) {
     <section className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
       <h2 className="text-lg font-semibold text-slate-100">Daftar Sample Training</h2>
       <p className="mt-1 text-sm text-slate-300">
-        Sample tersimpan di folder `public/img/training` dengan metadata state di file JSON server.
+        Sample image disimpan di server data dir dan disajikan lewat route image internal agar aman untuk runtime
+        serverless.
       </p>
 
       <div className="mt-4">

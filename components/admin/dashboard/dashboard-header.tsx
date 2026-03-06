@@ -39,7 +39,7 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
 
   return (
     <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
         <div>
           <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-cyan-200/90">
             <Image
@@ -65,34 +65,37 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/admin/training"
-            className="rounded-lg border border-cyan-300/40 bg-cyan-400/15 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25"
-          >
-            Modul Training
-          </Link>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium transition hover:bg-white/10"
-          >
-            Refresh Data
-          </button>
-          <button
-            type="button"
-            onClick={onClearHistory}
-            className="rounded-lg border border-rose-300/40 bg-rose-400/15 px-3 py-2 text-xs font-medium text-rose-100 transition hover:bg-rose-400/25"
-          >
-            Hapus Riwayat
-          </button>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-lg bg-cyan-300 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-cyan-200"
-          >
-            Logout
-          </button>
+        <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Menu Cepat</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <Link
+              href="/admin/training"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-cyan-300/40 bg-cyan-400/15 px-3 py-2 text-center text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/25"
+            >
+              Buka Modul Training
+            </Link>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-center text-xs font-medium transition hover:bg-white/10"
+            >
+              Refresh Data
+            </button>
+            <button
+              type="button"
+              onClick={onClearHistory}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-rose-300/40 bg-rose-400/15 px-3 py-2 text-center text-xs font-medium text-rose-100 transition hover:bg-rose-400/25"
+            >
+              Hapus Riwayat
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-cyan-300 px-3 py-2 text-center text-xs font-semibold text-slate-950 transition hover:bg-cyan-200"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 

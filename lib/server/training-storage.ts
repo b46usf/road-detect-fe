@@ -1,6 +1,7 @@
 export {
   readTrainingDatasetState,
   listTrainingSamples,
+  readTrainingImageBuffer,
   readTrainingImageAsDataUrl
 } from "@/lib/server/training-storage-persistence"
 
