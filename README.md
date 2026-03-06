@@ -68,6 +68,7 @@ npm run start
 ## Environment Variables
 
 - `ROBOFLOW_API_KEY` : kunci Roboflow (wajib untuk inference).
+- `SERVER_DATA_DIR` : override folder state file server. Default lokal: `.data`; di Vercel fallback ke `/tmp/roadster-fe-data`.
 - `ROBOFLOW_INFERENCE_ENDPOINT` : endpoint inferensi penuh. Wajib diisi di environment.
   Untuk endpoint serverless workflows, gunakan format `https://serverless.roboflow.com/<workspace>/workflows/<workflow-id>`.
 - `ROBOFLOW_MODEL_ID` : model id default server-side.
@@ -136,3 +137,4 @@ curl -sS -X POST \
 
 - Project ini berfokus pada workflow demo dan validasi fitur.
 - Untuk skala produksi, gunakan persistence backend/database dan observability yang lebih kuat.
+- Di Vercel, state file server sekarang memakai fallback `/tmp/roadster-fe-data`, jadi endpoint admin/inference tidak crash karena `mkdir /var/task/.data`. Ini tetap bersifat ephemeral dan bukan persistence permanen.

@@ -1,8 +1,11 @@
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { readString } from "@/lib/common-utils"
+import { getServerDataFilePath } from "@/lib/server/server-data-dir"
 
-const TRAINING_PIPELINE_STATE_FILE = path.join(process.cwd(), ".data", "training-pipeline-state.json")
+function getTrainingPipelineStateFilePath(): string {
+  return getServerDataFilePath("training-pipeline-state.json")
+}
 
 export type InferenceTarget = "serverless" | "dedicated"
 
@@ -51,7 +54,7 @@ function normalizeInferenceTarget(value: unknown): InferenceTarget {
 }
 
 async function ensurePipelineStateDir(): Promise<void> {
-  await fs.mkdir(path.dirname(TRAINING_PIPELINE_STATE_FILE), { recursive: true })
+  await fs.mkdir(path.dirname(getTrainingPipelineStateFilePath()), { recursive: true })
 }
 
 function normalizeState(value: unknown): TrainingPipelineState {
@@ -81,10 +84,8 @@ function normalizeState(value: unknown): TrainingPipelineState {
 }
 
 export async function readTrainingPipelineState(): Promise<TrainingPipelineState> {
-  await ensurePipelineStateDir()
-
   try {
-    const raw = await fs.readFile(TRAINING_PIPELINE_STATE_FILE, "utf8")
+    const raw = await fs.readFile(getTrainingPipelineStateFilePath(), "utf8")
     return normalizeState(JSON.parse(raw))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -98,13 +99,14 @@ export async function writeTrainingPipelineState(
   nextState: TrainingPipelineState
 ): Promise<TrainingPipelineState> {
   await ensurePipelineStateDir()
+  const stateFile = getTrainingPipelineStateFilePath()
   const normalized = normalizeState({
     ...nextState,
     updatedAt: new Date().toISOString()
   })
-  const tempFile = `${TRAINING_PIPELINE_STATE_FILE}.tmp`
+  const tempFile = `${stateFile}.tmp`
   await fs.writeFile(tempFile, JSON.stringify(normalized, null, 2), "utf8")
-  await fs.rename(tempFile, TRAINING_PIPELINE_STATE_FILE)
+  await fs.rename(tempFile, stateFile)
   return normalized
 }
 

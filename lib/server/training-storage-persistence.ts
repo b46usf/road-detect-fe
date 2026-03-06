@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { readString } from "@/lib/common-utils"
+import { getServerDataFilePath } from "@/lib/server/server-data-dir"
 import { normalizeTrainingAnnotations } from "@/lib/training-annotations"
 import {
   TRAINING_LABELS,
@@ -15,12 +16,15 @@ import {
 
 const TRAINING_IMAGE_PUBLIC_SUBDIR = path.join("img", "training")
 const TRAINING_IMAGE_DIR = path.join(process.cwd(), "public", TRAINING_IMAGE_PUBLIC_SUBDIR)
-const TRAINING_METADATA_FILE = path.join(process.cwd(), ".data", "training-samples.json")
 const MAX_TRAINING_IMAGE_BYTES = 6_000_000
 
 const STATUS_SET = new Set<TrainingSampleStatus>(["queued", "uploading", "uploaded", "failed"])
 const LABEL_SET = new Set<TrainingLabel>(TRAINING_LABELS)
 const SEVERITY_SET = new Set<TrainingSeverity>(TRAINING_SEVERITIES)
+
+function getTrainingMetadataFilePath(): string {
+  return getServerDataFilePath("training-samples.json")
+}
 
 let writeQueue: Promise<void> = Promise.resolve()
 
@@ -35,7 +39,7 @@ export function withTrainingWriteLock<T>(task: () => Promise<T>): Promise<T> {
 
 export async function ensureTrainingDirectories(): Promise<void> {
   await fs.mkdir(TRAINING_IMAGE_DIR, { recursive: true })
-  await fs.mkdir(path.dirname(TRAINING_METADATA_FILE), { recursive: true })
+  await fs.mkdir(path.dirname(getTrainingMetadataFilePath()), { recursive: true })
 }
 
 function createDefaultState(): TrainingDatasetState {
@@ -104,10 +108,8 @@ function normalizeTrainingSample(value: unknown, index: number): TrainingSample 
 }
 
 export async function readStateFromDisk(): Promise<TrainingDatasetState> {
-  await ensureTrainingDirectories()
-
   try {
-    const raw = await fs.readFile(TRAINING_METADATA_FILE, "utf8")
+    const raw = await fs.readFile(getTrainingMetadataFilePath(), "utf8")
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== "object") {
       return createDefaultState()
@@ -134,14 +136,15 @@ export async function readStateFromDisk(): Promise<TrainingDatasetState> {
 
 export async function writeStateToDisk(state: TrainingDatasetState): Promise<void> {
   await ensureTrainingDirectories()
+  const metadataFile = getTrainingMetadataFilePath()
   const nextState: TrainingDatasetState = {
     ...state,
     updatedAt: new Date().toISOString()
   }
 
-  const tempFile = `${TRAINING_METADATA_FILE}.tmp`
+  const tempFile = `${metadataFile}.tmp`
   await fs.writeFile(tempFile, JSON.stringify(nextState, null, 2), "utf8")
-  await fs.rename(tempFile, TRAINING_METADATA_FILE)
+  await fs.rename(tempFile, metadataFile)
 }
 
 export function extensionFromMime(mime: string): string {

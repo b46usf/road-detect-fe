@@ -1,6 +1,7 @@
 import { promises as fs } from "fs"
 import path from "path"
 import { toFiniteNumber, readString } from "@/lib/common-utils"
+import { getServerDataFilePath } from "@/lib/server/server-data-dir"
 
 export interface RoboflowApiKeyValidationCache {
   key: string
@@ -26,7 +27,7 @@ declare global {
 }
 
 function getStatsFilePath(): string {
-  return path.join(process.cwd(), ".data", "roboflow-admin-stats.json")
+  return getServerDataFilePath("roboflow-admin-stats.json")
 }
 
 function normalizeStats(value: unknown): RoboflowApiKeyValidationStats | null {
