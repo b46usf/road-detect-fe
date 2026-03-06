@@ -16,3 +16,11 @@ export function getClientRoboflowModelId(): string {
 export function getClientRoboflowModelVersion(): string {
   return readString(process.env.NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION, DEFAULT_ROBOFLOW_MODEL_VERSION)
 }
+
+export function getClientAdminUsername(): string {
+  return readString(process.env.NEXT_PUBLIC_ADMIN_USERNAME)
+}
+
+export function getClientAdminPassword(): string {
+  return readString(process.env.NEXT_PUBLIC_ADMIN_PASSWORD)
+}

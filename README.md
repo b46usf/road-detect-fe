@@ -68,13 +68,17 @@ npm run start
 ## Environment Variables
 
 - `ROBOFLOW_API_KEY` : kunci Roboflow (wajib untuk inference).
-- `ROBOFLOW_INFERENCE_ENDPOINT` : (opsional) endpoint inferensi penuh. Default diarahkan ke endpoint serverless ROADSTER.
+- `ROBOFLOW_INFERENCE_ENDPOINT` : endpoint inferensi penuh. Wajib diisi di environment.
   Untuk endpoint serverless workflows, gunakan format `https://serverless.roboflow.com/<workspace>/workflows/<workflow-id>`.
-- `ROBOFLOW_MODEL_ID` : model id default.
-- `ROBOFLOW_MODEL_VERSION` : model version default.
+- `ROBOFLOW_MODEL_ID` : model id default server-side.
+- `ROBOFLOW_MODEL_VERSION` : model version default server-side.
+- `NEXT_PUBLIC_ROBOFLOW_MODEL_ID` : model id default client-side.
+- `NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION` : model version default client-side.
+- `NEXT_PUBLIC_APP_URL` : base URL aplikasi untuk metadata/canonical URL.
+- `NEXT_PUBLIC_ADMIN_USERNAME` : username login admin local-storage mode.
+- `NEXT_PUBLIC_ADMIN_PASSWORD` : password login admin local-storage mode.
 - `ROBOFLOW_ENDPOINT_SECRET` : secret header `x-roboflow-endpoint-secret` untuk endpoint admin/server.
 - `SYNC_ROBOFLOW_ENDPOINT` : endpoint tujuan sinkronisasi dari Actions.
-- `SYNC_ROBOFLOW_SECRET` : legacy fallback (deprecated), gunakan `ROBOFLOW_ENDPOINT_SECRET`.
 - `ROBOFLOW_TRAINING_UPLOAD_ENDPOINT` : endpoint upload dataset/sample training Roboflow.
 - `ROBOFLOW_TRAINING_TRIGGER_ENDPOINT` : endpoint trigger proses training Roboflow.
 
@@ -97,8 +101,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 3. Tambahkan environment variables di hosting (mis. Vercel):
 - `ROBOFLOW_API_KEY`
+- `ROBOFLOW_INFERENCE_ENDPOINT`
 - `ROBOFLOW_MODEL_ID`
 - `ROBOFLOW_MODEL_VERSION`
+- `NEXT_PUBLIC_ROBOFLOW_MODEL_ID`
+- `NEXT_PUBLIC_ROBOFLOW_MODEL_VERSION`
+- `NEXT_PUBLIC_APP_URL`
 - `ROBOFLOW_ENDPOINT_SECRET`
 
 4. Uji endpoint (opsional):
@@ -118,6 +126,8 @@ curl -sS -X POST \
 ## Keamanan
 
 - Jangan commit secrets ke repository.
+- `NEXT_PUBLIC_ADMIN_USERNAME` dan `NEXT_PUBLIC_ADMIN_PASSWORD` hanya cocok untuk mode admin local-storage/dev ringan.
+  Untuk admin production yang benar, pindahkan login ke server-side auth.
 - Gunakan GitHub Secrets untuk workflow.
 - Gunakan environment variables pada platform deployment untuk runtime.
 - Pastikan `.env` tetap masuk `.gitignore`.

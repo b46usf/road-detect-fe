@@ -1,7 +1,8 @@
+import { getClientAdminPassword, getClientAdminUsername } from "@/lib/env/client"
 import type { GisMapSettings } from "./types"
 
-export const ADMIN_DEFAULT_USERNAME = "admin"
-export const ADMIN_DEFAULT_PASSWORD = "Adm1n@321"
+export const ADMIN_DEFAULT_USERNAME = getClientAdminUsername()
+export const ADMIN_DEFAULT_PASSWORD = getClientAdminPassword()
 
 const STORAGE_KEY_PREFIX = "roadster"
 const LEGACY_STORAGE_KEY_PREFIX = "road-detect"

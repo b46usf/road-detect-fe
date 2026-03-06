@@ -1,6 +1,10 @@
 "use client"
 
 import type { InferenceRuntimeState } from "@/lib/inference-runtime-state"
+import {
+  DEFAULT_TRAINING_MIN_UPLOADED_SAMPLES,
+  DEFAULT_TRAINING_RECOMMENDED_MAX_UPLOADED_SAMPLES
+} from "@/lib/env/shared"
 import type {
   TrainingConfigState,
   TrainingPipelineState
@@ -59,8 +63,9 @@ export default function TrainingPipelinePanel(props: TrainingPipelinePanelProps)
     statusMessage
   } = props
 
-  const minUploadedSamples = config?.minUploadedSamples ?? 100
-  const recommendedMaxUploadedSamples = config?.recommendedMaxUploadedSamples ?? 500
+  const minUploadedSamples = config?.minUploadedSamples ?? DEFAULT_TRAINING_MIN_UPLOADED_SAMPLES
+  const recommendedMaxUploadedSamples =
+    config?.recommendedMaxUploadedSamples ?? DEFAULT_TRAINING_RECOMMENDED_MAX_UPLOADED_SAMPLES
   const triggerLocked = uploadedCount < minUploadedSamples
   const dedicatedDeploymentEnabled = Boolean(config?.dedicatedDeploymentEnabled)
   const dedicatedDeploymentReady = Boolean(config?.dedicatedDeploymentReady)

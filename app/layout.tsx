@@ -5,6 +5,7 @@ import {
   ROADSTER_NAME
 } from "@/lib/app-brand"
 import { getClientAppUrl } from "@/lib/env/client"
+import { DEFAULT_LOCAL_APP_URL } from "@/lib/env/shared"
 import "./globals.css"
 
 const metadataBaseUrl = (() => {
@@ -12,7 +13,7 @@ const metadataBaseUrl = (() => {
   try {
     return new URL(rawAppUrl)
   } catch {
-    return new URL("http://localhost:3000")
+    return new URL(DEFAULT_LOCAL_APP_URL)
   }
 })()
 

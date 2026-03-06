@@ -1,3 +1,8 @@
+import {
+  DEFAULT_TRAINING_MIN_UPLOADED_SAMPLES,
+  DEFAULT_TRAINING_RECOMMENDED_MAX_UPLOADED_SAMPLES
+} from "@/lib/env/shared"
+
 export interface TrainingConfigState {
   uploadEndpointConfigured: boolean
   triggerEndpointConfigured: boolean
@@ -81,12 +86,12 @@ export function normalizeConfig(value: unknown): TrainingConfigState | null {
     minUploadedSamples:
       typeof source.minUploadedSamples === "number" && Number.isFinite(source.minUploadedSamples)
         ? Math.max(1, source.minUploadedSamples)
-        : 100,
+        : DEFAULT_TRAINING_MIN_UPLOADED_SAMPLES,
     recommendedMaxUploadedSamples:
       typeof source.recommendedMaxUploadedSamples === "number" &&
       Number.isFinite(source.recommendedMaxUploadedSamples)
         ? Math.max(1, source.recommendedMaxUploadedSamples)
-        : 500
+        : DEFAULT_TRAINING_RECOMMENDED_MAX_UPLOADED_SAMPLES
   }
 }
 
