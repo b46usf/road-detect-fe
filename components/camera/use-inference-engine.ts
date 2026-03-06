@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type RefObject } from "react"
-import { appendDetectionHistory, createStoredDetectionRecord } from "@/lib/admin-storage"
-import { toFiniteNumber } from "@/lib/common-utils"
 import {
-  extractApiErrorInfo,
-  parseInferenceResponse,
-  type DetectionReport
-} from "@/lib/roboflow-client"
-import { normalizePredictionsToDetections } from "@/lib/roboflow-utils"
+  CameraInferenceError,
+  persistInferenceHistory,
+  requestCameraInference
+} from "@/components/camera/inference-engine-service"
 import {
-  CAPTURE_JPEG_QUALITY,
-  DEFAULT_CONFIDENCE,
-  DEFAULT_OVERLAP,
   INFERENCE_THROTTLE_MS,
   SNAPSHOT_INTERVAL_MS
 } from "./constants"
@@ -21,6 +15,7 @@ import type {
   DetectionPrediction,
   GpsLocation
 } from "./types"
+import type { DetectionReport } from "@/lib/roboflow-client"
 
 interface UseInferenceEngineOptions {
   status: CameraStatus
@@ -30,6 +25,13 @@ interface UseInferenceEngineOptions {
   modelVersion: string
   gpsLocation: GpsLocation | null
   isMountedRef: MutableRefObject<boolean>
+}
+
+function buildMissingModelError() {
+  return {
+    message: "Isi Model ID dan Version untuk menjalankan deteksi.",
+    code: "MODEL_REQUIRED"
+  }
 }
 
 export function useInferenceEngine(options: UseInferenceEngineOptions) {
@@ -77,11 +79,11 @@ export function useInferenceEngine(options: UseInferenceEngineOptions) {
       const normalizedModelVersion = modelVersion.trim()
 
       if (!normalizedModelId || !normalizedModelVersion) {
-        const message = "Isi Model ID dan Version untuk menjalankan deteksi."
+        const { message, code } = buildMissingModelError()
         setInferenceError(message)
         setLastApiStatus("error")
         setLastApiMessage(message)
-        setLastApiCode("MODEL_REQUIRED")
+        setLastApiCode(code)
         setDetections([])
         setDetectionFrameSize({ width: frame.width, height: frame.height })
         setLastInferenceDurationMs(null)
@@ -98,108 +100,41 @@ export function useInferenceEngine(options: UseInferenceEngineOptions) {
       setInferenceError(null)
 
       try {
-        const detectedAt = new Date().toISOString()
-        const sourceWidth = videoRef.current?.videoWidth ?? frame.width
-        const sourceHeight = videoRef.current?.videoHeight ?? frame.height
-        const imageToSend = typeof frame.dataUrl === "string" ? frame.dataUrl.trim() : frame.dataUrl
-
-        const response = await fetch("/api/roboflow", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            image: imageToSend,
-            modelId: normalizedModelId,
-            modelVersion: normalizedModelVersion,
-            confidence: DEFAULT_CONFIDENCE,
-            overlap: DEFAULT_OVERLAP,
-            frameWidth: frame.width,
-            frameHeight: frame.height,
-            detectedAt,
-            location: gpsLocation
-              ? {
-                  latitude: gpsLocation.latitude,
-                  longitude: gpsLocation.longitude,
-                  accuracy: gpsLocation.accuracy,
-                  altitude: gpsLocation.altitude,
-                  heading: gpsLocation.heading,
-                  speed: gpsLocation.speed,
-                  timestamp: gpsLocation.timestamp,
-                  source: gpsLocation.source
-                }
-              : null,
-            evidence: {
-              mime: "image/jpeg",
-              quality: CAPTURE_JPEG_QUALITY,
-              captureWidth: frame.width,
-              captureHeight: frame.height,
-              sourceWidth,
-              sourceHeight
-            }
-          })
+        const result = await requestCameraInference({
+          frame,
+          modelId: normalizedModelId,
+          modelVersion: normalizedModelVersion,
+          gpsLocation,
+          sourceWidth: videoRef.current?.videoWidth ?? frame.width,
+          sourceHeight: videoRef.current?.videoHeight ?? frame.height
         })
-
-        const responseText = await response.text()
-        let payload: unknown = { raw: responseText }
-
-        try {
-          payload = JSON.parse(responseText)
-        } catch {
-          payload = { raw: responseText }
-        }
-
-        const parsedError = extractApiErrorInfo(payload)
-        if (!response.ok || parsedError) {
-          if (!isMountedRef.current) {
-            return
-          }
-
-          const fallbackMessage = `Request API gagal (HTTP ${response.status}).`
-          const message = parsedError?.message ?? fallbackMessage
-
-          setInferenceError(message)
-          setLastApiStatus("error")
-          setLastApiMessage(message)
-          setLastApiCode(parsedError?.code ?? `HTTP_${response.status}`)
-          setLastInferenceDurationMs(null)
-          setDetections([])
-          setDetectionFrameSize({ width: frame.width, height: frame.height })
-          setLastDetectionReport(null)
-          return
-        }
-
-        const successPayload = parseInferenceResponse(payload)
-        const inferenceData = successPayload.data
-        const report = successPayload.report
-
-        const parsedPredictions = normalizePredictionsToDetections(inferenceData.predictions)
-        const inferenceWidth = toFiniteNumber(inferenceData.image?.width) ?? frame.width
-        const inferenceHeight = toFiniteNumber(inferenceData.image?.height) ?? frame.height
 
         if (!isMountedRef.current) {
           return
         }
 
-        setDetections(parsedPredictions)
-        setDetectionFrameSize({ width: inferenceWidth, height: inferenceHeight })
+        setDetections(result.predictions)
+        setDetectionFrameSize({ width: result.frameWidth, height: result.frameHeight })
         setInferenceError(null)
         setLastApiStatus("success")
-        setLastApiMessage(successPayload.message)
+        setLastApiMessage(result.message)
         setLastApiCode(null)
-        setLastInferenceDurationMs(successPayload.durationMs)
-        setLastDetectionReport(report)
-        setLastInferenceAt(report?.waktuDeteksi ? new Date(report.waktuDeteksi) : new Date())
+        setLastInferenceDurationMs(result.durationMs)
+        setLastDetectionReport(result.report)
+        setLastInferenceAt(result.report?.waktuDeteksi ? new Date(result.report.waktuDeteksi) : new Date())
 
-        if (report) {
-          const historyRecord = createStoredDetectionRecord({
-            report,
+        if (result.report) {
+          const savedHistory = persistInferenceHistory({
+            report: result.report,
             modelId: normalizedModelId,
             modelVersion: normalizedModelVersion,
-            apiMessage: successPayload.message,
-            apiDurationMs: successPayload.durationMs
+            message: result.message,
+            durationMs: result.durationMs,
+            imageToSend: result.imageToSend,
+            frameWidth: result.frameWidth,
+            frameHeight: result.frameHeight,
+            predictions: result.predictions
           })
-          const savedHistory = appendDetectionHistory(historyRecord)
 
           if (savedHistory.ok) {
             setStorageMessage(`Riwayat admin tersimpan (${savedHistory.total} data).`)
@@ -225,7 +160,9 @@ export function useInferenceEngine(options: UseInferenceEngineOptions) {
         setInferenceError(message)
         setLastApiStatus("error")
         setLastApiMessage(message)
-        setLastApiCode("INFERENCE_RUNTIME_ERROR")
+        setLastApiCode(
+          error instanceof CameraInferenceError ? error.code : "INFERENCE_RUNTIME_ERROR"
+        )
         setLastInferenceDurationMs(null)
         setDetections([])
         setLastDetectionReport(null)

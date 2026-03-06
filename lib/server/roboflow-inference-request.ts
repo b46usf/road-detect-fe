@@ -1,4 +1,5 @@
 import { extractMimeFromDataUrl, readString } from "@/lib/common-utils"
+import { getServerRoboflowAllowedOrigins } from "@/lib/env/server"
 import type { RoboflowEndpointType } from "@/lib/server/roboflow-endpoint"
 
 export function parseOptionalNumber(value: unknown): string | null | "invalid" {
@@ -39,15 +40,10 @@ export function isOriginAllowed(request: Request): boolean {
     return false
   }
 
-  const rawAllowedOrigins = readString(process.env.ROBOFLOW_ALLOWED_ORIGINS)
-  if (!rawAllowedOrigins) {
+  const allowedOrigins = getServerRoboflowAllowedOrigins()
+  if (allowedOrigins.length === 0) {
     return false
   }
-
-  const allowedOrigins = rawAllowedOrigins
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
 
   return allowedOrigins.includes(origin)
 }

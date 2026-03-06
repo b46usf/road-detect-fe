@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import type { StoredDetectionRecord } from "@/lib/admin-storage"
 import AdaptiveDataTable, { type AdaptiveDataColumn } from "@/components/ui/adaptive-data-table"
 import DetectionResultModal from "@/components/admin/dashboard/detection-result-modal"
@@ -14,6 +14,56 @@ interface DetectionHistoryPanelProps {
 export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps) {
   const { records } = props
   const [selectedRecord, setSelectedRecord] = useState<StoredDetectionRecord | null>(null)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [trainingMessage, setTrainingMessage] = useState<string | null>(null)
+
+  const queueRecordToTraining = useCallback(async (record: StoredDetectionRecord) => {
+    const candidate = record.trainingCandidate
+    if (!candidate?.imageDataUrl || !candidate.imageWidth || !candidate.imageHeight) {
+      setTrainingMessage("Record ini belum punya image evidence untuk dikirim ke training.")
+      return
+    }
+
+    setApprovingId(record.id)
+    setTrainingMessage(null)
+    try {
+      const response = await fetch("/api/admin/training/samples", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          imageDataUrl: candidate.imageDataUrl,
+          imageWidth: candidate.imageWidth,
+          imageHeight: candidate.imageHeight,
+          label: record.dominantClass ?? "other",
+          severity: record.tingkatKerusakan === "tidak-terdeteksi" ? "unknown" : record.tingkatKerusakan,
+          annotations: candidate.annotations,
+          notes: `Approved from admin dashboard detection record ${record.id}`,
+          source: "camera-capture"
+        })
+      })
+
+      const payload: unknown = await response.json()
+      const body = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
+      if (!response.ok || body.ok !== true) {
+        const errorObject =
+          body.error && typeof body.error === "object" ? (body.error as Record<string, unknown>) : {}
+        const message =
+          typeof errorObject.message === "string" && errorObject.message.trim().length > 0
+            ? errorObject.message
+            : "Gagal mengirim record ke antrean training."
+        setTrainingMessage(message)
+        return
+      }
+
+      setTrainingMessage("Detection approved dan masuk antrean training. Edit bounding box lanjutan bisa dilakukan di /admin/training.")
+    } catch {
+      setTrainingMessage("Gagal terhubung ke endpoint training.")
+    } finally {
+      setApprovingId(null)
+    }
+  }, [])
 
   const columns = useMemo<AdaptiveDataColumn<StoredDetectionRecord>[]>(
     () => [
@@ -113,9 +163,30 @@ export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps)
             <p className="text-[11px] text-slate-400">v{row.modelVersion}</p>
           </>
         )
+      },
+      {
+        id: "action",
+        header: "Aksi",
+        desktopCell: (row) => (
+          <button
+            type="button"
+            disabled={
+              approvingId === row.id ||
+              !row.trainingCandidate?.imageDataUrl ||
+              (row.trainingCandidate?.annotations.length ?? 0) === 0
+            }
+            onClick={(event) => {
+              event.stopPropagation()
+              void queueRecordToTraining(row)
+            }}
+            className="rounded-lg border border-cyan-300/40 bg-cyan-400/15 px-3 py-1.5 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {approvingId === row.id ? "Memproses..." : "Approve ke Training"}
+          </button>
+        )
       }
     ],
-    []
+    [approvingId, queueRecordToTraining]
   )
 
   return (
@@ -141,8 +212,15 @@ export default function DetectionHistoryPanel(props: DetectionHistoryPanelProps)
         </Link>
       </div>
       <p className="mb-3 text-xs text-cyan-200/80">
-        Klik baris tabel atau kartu data untuk melihat popup detail hasil deteksi.
+        Klik baris tabel atau kartu data untuk melihat popup detail hasil deteksi. Gunakan tombol
+        `Approve ke Training` untuk memindahkan candidate ke antrean review dataset.
       </p>
+
+      {trainingMessage && (
+        <p className="mb-3 rounded-lg border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
+          {trainingMessage}
+        </p>
+      )}
 
       <AdaptiveDataTable
         rows={records}

@@ -1,8 +1,8 @@
-import { readString } from "@/lib/common-utils"
+import { getServerRoboflowInferenceEndpoint } from "@/lib/env/server"
+import { DEFAULT_ROBOFLOW_INFERENCE_ENDPOINT } from "@/lib/env/shared"
 import { buildRoboflowPath } from "@/lib/server/roboflow-model-path"
 
-export const DEFAULT_ROBOFLOW_SERVERLESS_ENDPOINT =
-  "https://serverless.roboflow.com/baguss-workspace/workflows/detect-count-and-visualize"
+export const DEFAULT_ROBOFLOW_SERVERLESS_ENDPOINT = DEFAULT_ROBOFLOW_INFERENCE_ENDPOINT
 
 interface ResolveRoboflowEndpointParams {
   apiKey: string
@@ -10,6 +10,7 @@ interface ResolveRoboflowEndpointParams {
   modelVersion: string
   confidence: string | null
   overlap: string | null
+  endpointBaseOverride?: string | null
 }
 
 export type RoboflowEndpointType = "workflow" | "detect"
@@ -49,9 +50,11 @@ function normalizeServerlessWorkflowPath(url: URL): URL {
 export function resolveRoboflowEndpoint(
   params: ResolveRoboflowEndpointParams
 ): ResolvedRoboflowEndpoint | null {
-  const { apiKey, modelId, modelVersion, confidence, overlap } = params
-  const configuredEndpoint = readString(process.env.ROBOFLOW_INFERENCE_ENDPOINT)
-  const endpointBase = configuredEndpoint || DEFAULT_ROBOFLOW_SERVERLESS_ENDPOINT
+  const { apiKey, modelId, modelVersion, confidence, overlap, endpointBaseOverride } = params
+  const endpointBase =
+    endpointBaseOverride?.trim() ||
+    getServerRoboflowInferenceEndpoint() ||
+    DEFAULT_ROBOFLOW_SERVERLESS_ENDPOINT
 
   try {
     const inputUrl = new URL(endpointBase)
@@ -64,6 +67,39 @@ export function resolveRoboflowEndpoint(
         modelMeta: {
           modelId: null,
           modelVersion: null
+        }
+      }
+    }
+
+    if (
+      normalizedUrl.hostname.toLowerCase().endsWith(".roboflow.cloud") &&
+      normalizedUrl.hostname.toLowerCase() !== "serverless.roboflow.com"
+    ) {
+      const builtPath = buildRoboflowPath(modelId, modelVersion)
+      if (!builtPath) {
+        return null
+      }
+
+      normalizedUrl.pathname = `/${builtPath.path}`
+
+      if (!normalizedUrl.searchParams.has("api_key")) {
+        normalizedUrl.searchParams.set("api_key", apiKey)
+      }
+
+      if (confidence !== null) {
+        normalizedUrl.searchParams.set("confidence", confidence)
+      }
+
+      if (overlap !== null) {
+        normalizedUrl.searchParams.set("overlap", overlap)
+      }
+
+      return {
+        roboflowUrl: normalizedUrl.toString(),
+        endpointType: "detect",
+        modelMeta: {
+          modelId: builtPath.normalizedModelId || modelId,
+          modelVersion
         }
       }
     }

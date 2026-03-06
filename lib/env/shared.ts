@@ -1,0 +1,9 @@
+export const DEFAULT_LOCAL_APP_URL = "http://localhost:3000"
+export const DEFAULT_ROBOFLOW_MODEL_ID = "road-damage-ai"
+export const DEFAULT_ROBOFLOW_MODEL_VERSION = "8"
+export const DEFAULT_ROBOFLOW_INFERENCE_ENDPOINT =
+  "https://serverless.roboflow.com/baguss-workspace/workflows/find-barriers-potholes-waters-crackings-ruttings-and-roads"
+export const DEFAULT_ROBOFLOW_API_KEY_VALIDATION_TTL_MS = 60_000
+export const DEFAULT_TRAINING_MIN_UPLOADED_SAMPLES = 100
+export const DEFAULT_TRAINING_RECOMMENDED_MAX_UPLOADED_SAMPLES = 500
+export const DEFAULT_SMOKE_PORT = 3200

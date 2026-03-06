@@ -7,6 +7,9 @@ export default defineConfig({
     environment: "jsdom",
     include: ["tests/**/*.test.ts"],
     pool: "forks",
-    maxWorkers: 1
+    maxWorkers: 1,
+    fileParallelism: false,
+    testTimeout: 10000,
+    hookTimeout: 10000
   }
 })

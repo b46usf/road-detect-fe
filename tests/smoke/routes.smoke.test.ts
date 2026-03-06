@@ -4,10 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { ChildProcessWithoutNullStreams } from "node:child_process"
 import { spawn } from "node:child_process"
 import path from "node:path"
+import { DEFAULT_SMOKE_PORT } from "@/lib/env/shared"
 
 const SMOKE_ROUTES = ["/", "/camera", "/admin/login", "/admin/dashboard", "/admin/training"] as const
 const ALLOWED_STATUS_CODES = new Set([200, 301, 302, 307, 308])
-const port = Number(process.env.SMOKE_PORT ?? 3200)
+const port = Number(process.env.SMOKE_PORT ?? DEFAULT_SMOKE_PORT)
 const baseUrl = `http://127.0.0.1:${port}`
 
 let serverProcess: ChildProcessWithoutNullStreams | null = null

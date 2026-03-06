@@ -1,7 +1,13 @@
 "use client"
 
 import { useCallback, useMemo, useState, type FormEvent } from "react"
-import type { CreateTrainingSampleInput, TrainingLabel, TrainingSeverity } from "@/lib/training-types"
+import TrainingAnnotationCanvasEditor from "@/components/admin/training/training-annotation-canvas-editor"
+import type {
+  CreateTrainingSampleInput,
+  TrainingAnnotation,
+  TrainingLabel,
+  TrainingSeverity
+} from "@/lib/training-types"
 import {
   TRAINING_LABEL_OPTIONS,
   TRAINING_SEVERITY_OPTIONS
@@ -29,14 +35,26 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
+function readImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
+    image.onerror = () => reject(new Error("Dimensi image gagal dibaca."))
+    image.src = dataUrl
+  })
+}
+
 export default function TrainingUploadForm(props: TrainingUploadFormProps) {
   const { onSubmit, isSubmitting, statusMessage } = props
 
   const [imageDataUrl, setImageDataUrl] = useState("")
+  const [imageWidth, setImageWidth] = useState(0)
+  const [imageHeight, setImageHeight] = useState(0)
   const [filename, setFilename] = useState("")
   const [label, setLabel] = useState<TrainingLabel>("pothole")
   const [severity, setSeverity] = useState<TrainingSeverity>("sedang")
   const [notes, setNotes] = useState("")
+  const [annotations, setAnnotations] = useState<TrainingAnnotation[]>([])
   const [localMessage, setLocalMessage] = useState<string | null>(null)
 
   const previewReady = useMemo(() => imageDataUrl.length > 0, [imageDataUrl])
@@ -44,15 +62,22 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
   const handleFileChange = useCallback(async (file: File | null) => {
     if (!file) {
       setImageDataUrl("")
+      setImageWidth(0)
+      setImageHeight(0)
       setFilename("")
+      setAnnotations([])
       return
     }
 
     setLocalMessage(null)
     try {
       const dataUrl = await fileToDataUrl(file)
+      const dimensions = await readImageDimensions(dataUrl)
       setImageDataUrl(dataUrl)
+      setImageWidth(dimensions.width)
+      setImageHeight(dimensions.height)
       setFilename(file.name)
+      setAnnotations([])
     } catch (error) {
       const message =
         error instanceof Error && error.message.trim().length > 0
@@ -64,10 +89,13 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
 
   const resetForm = useCallback(() => {
     setImageDataUrl("")
+    setImageWidth(0)
+    setImageHeight(0)
     setFilename("")
     setLabel("pothole")
     setSeverity("sedang")
     setNotes("")
+    setAnnotations([])
   }, [])
 
   const submitForm = useCallback(
@@ -78,17 +106,25 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
         return
       }
 
+      if (annotations.length === 0) {
+        setLocalMessage("Buat minimal satu bounding box sebelum submit sample.")
+        return
+      }
+
       setLocalMessage(null)
       await onSubmit({
         imageDataUrl,
+        imageWidth,
+        imageHeight,
         label,
         severity,
+        annotations,
         notes,
         source: "admin-upload"
       })
       resetForm()
     },
-    [imageDataUrl, label, notes, onSubmit, resetForm, severity]
+    [annotations, imageDataUrl, imageHeight, imageWidth, label, notes, onSubmit, resetForm, severity]
   )
 
   return (
@@ -156,6 +192,18 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
             />
           </label>
 
+          {previewReady && (
+            <TrainingAnnotationCanvasEditor
+              imageSrc={imageDataUrl}
+              imageWidth={imageWidth}
+              imageHeight={imageHeight}
+              annotations={annotations}
+              onChange={setAnnotations}
+              defaultLabel={label}
+              title="Canvas Bounding Box Editor"
+            />
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="submit"
@@ -192,6 +240,10 @@ export default function TrainingUploadForm(props: TrainingUploadFormProps) {
                 className="h-48 w-full rounded-lg border border-white/10 object-cover"
               />
               <p className="truncate text-xs text-slate-300">{filename || "Unnamed image"}</p>
+              <p className="text-[11px] text-slate-400">
+                {imageWidth}x{imageHeight}px
+              </p>
+              <p className="text-[11px] text-slate-400">{annotations.length} box siap disimpan</p>
             </div>
           ) : (
             <p className="mt-2 text-xs text-slate-400">Belum ada image dipilih.</p>

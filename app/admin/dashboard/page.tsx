@@ -21,6 +21,10 @@ import {
   updateRoboflowAdminStats,
   writeGisMapSettings
 } from "@/lib/admin-storage"
+import {
+  normalizeInferenceRuntime,
+  type InferenceRuntimeState
+} from "@/lib/inference-runtime-state"
 import { confirmRoadsterAction } from "@/lib/ui/roadster-swal"
 
 const AdminGisMapPanel = lazyWithSkeleton(() => import("@/components/admin/gis-map-panel"), {
@@ -58,6 +62,7 @@ export default function AdminDashboardPage() {
   const [ready, setReady] = useState(false)
 
   const [rfStats, setRfStats] = useState<{ invalidCount: number; lastInvalidAt?: number } | null>(null)
+  const [inferenceRuntime, setInferenceRuntime] = useState<InferenceRuntimeState | null>(null)
 
   const [gisSettings, setGisSettings] = useState<GisMapSettings>(getDefaultGisMapSettings())
   const [gisDraft, setGisDraft] = useState<GisMapSettings>(getDefaultGisMapSettings())
@@ -115,14 +120,30 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
+  const fetchInferenceRuntime = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/inference-runtime", {
+        method: "GET",
+        cache: "no-store"
+      })
+
+      const json: unknown = await response.json()
+      const payload = json && typeof json === "object" ? (json as Record<string, unknown>) : null
+      setInferenceRuntime(normalizeInferenceRuntime(payload?.runtime))
+    } catch {
+      setInferenceRuntime(null)
+    }
+  }, [])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadData()
       void fetchRfStats()
+      void fetchInferenceRuntime()
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [fetchRfStats, loadData])
+  }, [fetchInferenceRuntime, fetchRfStats, loadData])
 
   useEffect(() => {
     const handleStorage = () => {
@@ -221,7 +242,12 @@ export default function AdminDashboardPage() {
           username={session?.username}
           stats={stats}
           rfStats={rfStats}
-          onRefresh={loadData}
+          inferenceRuntime={inferenceRuntime}
+          onRefresh={() => {
+            loadData()
+            void fetchRfStats()
+            void fetchInferenceRuntime()
+          }}
           onClearHistory={handleClearHistory}
           onLogout={handleLogout}
         />

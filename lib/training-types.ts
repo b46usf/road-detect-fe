@@ -12,6 +12,14 @@ export type TrainingLabel =
 
 export type TrainingSeverity = "ringan" | "sedang" | "berat" | "unknown"
 
+export interface TrainingAnnotation {
+  label: TrainingLabel
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface TrainingSample {
   id: string
   createdAt: string
@@ -20,10 +28,13 @@ export interface TrainingSample {
   publicImagePath: string
   mime: string
   sizeBytes: number
+  imageWidth: number
+  imageHeight: number
   label: TrainingLabel
   severity: TrainingSeverity
   notes: string
   source: TrainingSampleSource
+  annotations: TrainingAnnotation[]
   status: TrainingSampleStatus
   uploadAttempts: number
   uploadedAt: string | null
@@ -38,8 +49,11 @@ export interface TrainingDatasetState {
 
 export interface CreateTrainingSampleInput {
   imageDataUrl: string
+  imageWidth: number
+  imageHeight: number
   label: TrainingLabel
   severity: TrainingSeverity
+  annotations?: TrainingAnnotation[]
   notes?: string
   source?: TrainingSampleSource
 }

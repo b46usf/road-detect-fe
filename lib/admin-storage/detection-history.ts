@@ -1,4 +1,5 @@
 import { readString, toFiniteNumber } from "@/lib/common-utils"
+import { normalizeTrainingAnnotations } from "@/lib/training-annotations"
 import type { DetectionReport } from "@/lib/roboflow-client"
 import {
   DETECTION_HISTORY_MAX_ITEMS,
@@ -25,8 +26,14 @@ export function createStoredDetectionRecord(params: {
   modelVersion: string
   apiMessage: string
   apiDurationMs: number | null
+  trainingCandidate?: {
+    imageDataUrl: string
+    imageWidth: number
+    imageHeight: number
+    annotations: unknown
+  } | null
 }): StoredDetectionRecord {
-  const { report, modelId, modelVersion, apiMessage, apiDurationMs } = params
+  const { report, modelId, modelVersion, apiMessage, apiDurationMs, trainingCandidate } = params
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   const createdAt = new Date().toISOString()
   const location = report?.lokasi
@@ -74,6 +81,7 @@ export function createStoredDetectionRecord(params: {
     lokasi: location,
     waktuDeteksi: report?.waktuDeteksi || createdAt,
     visualBukti: {
+      imageDataUrl: report?.visualBukti?.imageDataUrl || trainingCandidate?.imageDataUrl || null,
       mime: report?.visualBukti?.mime || "image/jpeg",
       quality: report?.visualBukti?.quality ?? null,
       captureWidth: report?.visualBukti?.resolusiCapture?.width ?? null,
@@ -83,6 +91,21 @@ export function createStoredDetectionRecord(params: {
       isFhdSource:
         typeof report?.visualBukti?.isFhdSource === "boolean" ? report.visualBukti.isFhdSource : null
     },
+    trainingCandidate:
+      report?.visualBukti?.imageDataUrl || trainingCandidate?.imageDataUrl
+        ? {
+            imageDataUrl: report?.visualBukti?.imageDataUrl || trainingCandidate?.imageDataUrl || null,
+            imageWidth:
+              report?.visualBukti?.resolusiCapture?.width ??
+              trainingCandidate?.imageWidth ??
+              null,
+            imageHeight:
+              report?.visualBukti?.resolusiCapture?.height ??
+              trainingCandidate?.imageHeight ??
+              null,
+            annotations: normalizeTrainingAnnotations(trainingCandidate?.annotations)
+          }
+        : null,
     spatial: createSpatialRecord({
       id,
       createdAt,
@@ -131,6 +154,10 @@ function normalizeRecord(value: unknown, index: number): StoredDetectionRecord |
     source.visualBukti && typeof source.visualBukti === "object"
       ? (source.visualBukti as Record<string, unknown>)
       : {}
+  const trainingCandidateRaw =
+    source.trainingCandidate && typeof source.trainingCandidate === "object"
+      ? (source.trainingCandidate as Record<string, unknown>)
+      : null
 
   const spatialInput = source.spatial
   const fallbackSpatial = createSpatialRecord({
@@ -172,6 +199,7 @@ function normalizeRecord(value: unknown, index: number): StoredDetectionRecord |
     lokasi,
     waktuDeteksi,
     visualBukti: {
+      imageDataUrl: readString(visualRaw.imageDataUrl) || null,
       mime: readString(visualRaw.mime, "image/jpeg"),
       quality: toFiniteNumber(visualRaw.quality),
       captureWidth: toFiniteNumber(visualRaw.captureWidth),
@@ -180,6 +208,14 @@ function normalizeRecord(value: unknown, index: number): StoredDetectionRecord |
       sourceHeight: toFiniteNumber(visualRaw.sourceHeight),
       isFhdSource: typeof visualRaw.isFhdSource === "boolean" ? visualRaw.isFhdSource : null
     },
+    trainingCandidate: trainingCandidateRaw
+      ? {
+          imageDataUrl: readString(trainingCandidateRaw.imageDataUrl) || null,
+          imageWidth: toFiniteNumber(trainingCandidateRaw.imageWidth),
+          imageHeight: toFiniteNumber(trainingCandidateRaw.imageHeight),
+          annotations: normalizeTrainingAnnotations(trainingCandidateRaw.annotations)
+        }
+      : null,
     spatial: isSpatialRecord(spatialInput) ? spatialInput : fallbackSpatial
   }
 }

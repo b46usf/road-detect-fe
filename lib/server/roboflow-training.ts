@@ -1,313 +1,157 @@
-import { readString, toFiniteNumber } from "@/lib/common-utils"
-import { extractUpstreamMessage, translateUpstreamMessage } from "@/lib/roboflow-client"
 import {
-  listTrainingSamples,
-  patchTrainingSample,
-  readTrainingImageAsDataUrl
-} from "@/lib/server/training-storage"
+  buildTrainingTriggerPolicy,
+  getDedicatedInferenceEndpoint,
+  getRoboflowApiKey,
+  getTrainingTriggerEndpoint
+} from "@/lib/server/roboflow-training-config"
+import {
+  tryAutoDeployIfReady
+} from "@/lib/server/roboflow-training-deployment"
+export {
+  buildTrainingTriggerPolicy,
+  countSamplesByStatus,
+  getTrainingPipelineConfigState
+} from "@/lib/server/roboflow-training-config"
+export {
+  checkRoboflowDedicatedDeploymentStatus,
+  deployRoboflowModel
+} from "@/lib/server/roboflow-training-deployment"
+export { uploadQueuedTrainingSamples } from "@/lib/server/roboflow-training-upload"
+export type {
+  DeployTrainingResult,
+  SyncTrainingStatusResult,
+  TrainingPipelineConfigState,
+  TrainingTriggerPolicyState,
+  TriggerTrainingResult,
+  UploadPendingSamplesResult
+} from "@/lib/server/roboflow-training-types"
 import type {
-  TrainingPipelineRunSummary,
-  TrainingSample,
-  TrainingSampleStatus
-} from "@/lib/training-types"
+  SyncTrainingStatusResult,
+  TriggerTrainingResult
+} from "@/lib/server/roboflow-training-types"
+import {
+  appendApiKeyToEndpoint,
+  extractTrainingVersion,
+  isTrainingReadyPayload,
+  parseResponsePayload,
+  parseTrainingHttpError,
+  resolveTrainingStatusEndpoint
+} from "@/lib/server/roboflow-training-utils"
+import {
+  patchTrainingPipelineState,
+  readTrainingPipelineState,
+  type InferenceTarget,
+  type TrainingPipelineState
+} from "@/lib/server/training-pipeline-state"
+import { listTrainingSamples } from "@/lib/server/training-storage"
 
-interface UploadAttemptResult {
-  sampleId: string
-  status: "uploaded" | "failed" | "skipped"
-  message: string
-  remoteId: string | null
+export async function getTrainingPipelineSnapshot(): Promise<TrainingPipelineState> {
+  return readTrainingPipelineState()
 }
 
-export interface UploadPendingSamplesResult {
-  ok: boolean
-  message: string
-  summary: TrainingPipelineRunSummary
-  attempts: UploadAttemptResult[]
-}
-
-export interface TriggerTrainingResult {
+export async function setTrainingInferenceTarget(targetInput: unknown): Promise<{
   ok: boolean
   status: number
   message: string
-  response: unknown
-}
+  state: TrainingPipelineState
+}> {
+  const nextTarget: InferenceTarget = targetInput === "dedicated" ? "dedicated" : "serverless"
+  const current = await readTrainingPipelineState()
 
-function getTrainingUploadEndpoint(): string {
-  return readString(process.env.ROBOFLOW_TRAINING_UPLOAD_ENDPOINT)
-}
-
-function getTrainingTriggerEndpoint(): string {
-  return readString(process.env.ROBOFLOW_TRAINING_TRIGGER_ENDPOINT)
-}
-
-function getRoboflowApiKey(): string {
-  return readString(process.env.ROBOFLOW_API_KEY)
-}
-
-function appendApiKeyToEndpoint(rawEndpoint: string, apiKey: string): string {
-  if (!apiKey) {
-    return rawEndpoint
-  }
-
-  try {
-    const url = new URL(rawEndpoint)
-    if (!url.searchParams.has("api_key")) {
-      url.searchParams.set("api_key", apiKey)
-    }
-    return url.toString()
-  } catch {
-    return rawEndpoint
-  }
-}
-
-async function parseResponsePayload(response: Response): Promise<unknown> {
-  const responseText = await response.text()
-  try {
-    return JSON.parse(responseText)
-  } catch {
-    return { raw: responseText }
-  }
-}
-
-function extractRemoteId(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null
-  }
-
-  const source = payload as Record<string, unknown>
-  const directId = readString(source.id)
-  if (directId) {
-    return directId
-  }
-
-  if (source.image && typeof source.image === "object") {
-    const imageId = readString((source.image as Record<string, unknown>).id)
-    if (imageId) {
-      return imageId
+  if (nextTarget === "dedicated" && !getDedicatedInferenceEndpoint()) {
+    return {
+      ok: false,
+      status: 400,
+      message: "ROBOFLOW_DEDICATED_INFERENCE_ENDPOINT belum dikonfigurasi.",
+      state: current
     }
   }
 
-  if (Array.isArray(source.outputs) && source.outputs.length > 0) {
-    const firstOutput = source.outputs[0]
-    if (firstOutput && typeof firstOutput === "object") {
-      const outputId = readString((firstOutput as Record<string, unknown>).id)
-      if (outputId) {
-        return outputId
-      }
-    }
-  }
+  const nextState = await patchTrainingPipelineState({
+    inferenceTarget: nextTarget,
+    lastError: null
+  })
 
-  return null
+  return {
+    ok: true,
+    status: 200,
+    message:
+      nextTarget === "dedicated"
+        ? "Inference target diubah ke dedicated endpoint."
+        : "Inference target diubah ke serverless workflow.",
+    state: nextState
+  }
 }
 
-function parseHttpError(response: Response, payload: unknown): string {
-  const upstreamRaw = extractUpstreamMessage(payload)
-  if (upstreamRaw) {
-    return `HTTP ${response.status}: ${translateUpstreamMessage(upstreamRaw)}`
-  }
-
-  return `HTTP ${response.status}: Upload ke Roboflow gagal.`
-}
-
-async function uploadSampleViaEndpoint(sample: TrainingSample): Promise<{ remoteId: string | null }> {
-  const uploadEndpoint = getTrainingUploadEndpoint()
-  if (!uploadEndpoint) {
-    throw new Error("ROBOFLOW_TRAINING_UPLOAD_ENDPOINT belum dikonfigurasi.")
-  }
-
-  const apiKey = getRoboflowApiKey()
-  const endpoint = appendApiKeyToEndpoint(uploadEndpoint, apiKey)
-  const imageDataUrl = await readTrainingImageAsDataUrl(sample)
-  const base64Payload = imageDataUrl.split(",", 2)[1] ?? ""
-  const metadata = {
-    label: sample.label,
-    severity: sample.severity,
-    source: sample.source,
-    notes: sample.notes
-  }
-
-  const jsonCandidates: unknown[] = [
-    {
-      api_key: apiKey,
-      inputs: {
-        image: imageDataUrl,
-        metadata
-      }
-    },
-    {
-      api_key: apiKey,
-      image: imageDataUrl,
-      name: sample.filename,
-      split: "train",
-      tag: sample.label,
-      metadata
-    },
-    {
-      api_key: apiKey,
-      image: base64Payload,
-      name: sample.filename,
-      split: "train",
-      tag: sample.label,
-      metadata
+export async function syncRoboflowTrainingStatus(): Promise<SyncTrainingStatusResult> {
+  const state = await readTrainingPipelineState()
+  if (!state.pendingVersion) {
+    return {
+      ok: false,
+      status: 400,
+      ready: false,
+      message: "Belum ada versi training pending yang perlu dicek.",
+      response: state
     }
-  ]
-
-  let latestError = "Upload ke Roboflow gagal."
-
-  for (const body of jsonCandidates) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(body),
-      cache: "no-store"
-    })
-
-    const parsedPayload = await parseResponsePayload(response)
-    if (response.ok) {
-      return {
-        remoteId: extractRemoteId(parsedPayload)
-      }
-    }
-
-    latestError = parseHttpError(response, parsedPayload)
   }
 
-  const uploadMime = readString(sample.mime, "image/jpeg")
-  const uploadBuffer = Buffer.from(base64Payload, "base64")
-  const form = new FormData()
-  form.append("api_key", apiKey)
-  form.append("name", sample.filename)
-  form.append("split", "train")
-  form.append("tag", sample.label)
-  form.append("file", new Blob([uploadBuffer], { type: uploadMime }), sample.filename)
+  const endpoint = resolveTrainingStatusEndpoint(state.pendingVersion)
+  if (!endpoint) {
+    return {
+      ok: false,
+      status: 0,
+      ready: false,
+      message: "Status endpoint training belum bisa diturunkan. Set ROBOFLOW_TRAINING_STATUS_ENDPOINT_TEMPLATE jika perlu.",
+      response: state
+    }
+  }
 
-  const formResponse = await fetch(endpoint, {
-    method: "POST",
-    body: form,
+  const response = await fetch(appendApiKeyToEndpoint(endpoint, getRoboflowApiKey()), {
+    method: "GET",
     cache: "no-store"
   })
-  const formPayload = await parseResponsePayload(formResponse)
-  if (formResponse.ok) {
-    return {
-      remoteId: extractRemoteId(formPayload)
-    }
-  }
+  const payload = await parseResponsePayload(response)
 
-  latestError = parseHttpError(formResponse, formPayload)
-  throw new Error(latestError)
-}
-
-function createSummaryFromAttempts(attempts: UploadAttemptResult[]): TrainingPipelineRunSummary {
-  return attempts.reduce<TrainingPipelineRunSummary>(
-    (summary, item) => {
-      summary.total += 1
-      if (item.status === "uploaded") {
-        summary.succeeded += 1
-      } else if (item.status === "failed") {
-        summary.failed += 1
-      } else {
-        summary.skipped += 1
-      }
-      return summary
-    },
-    {
-      total: 0,
-      succeeded: 0,
-      failed: 0,
-      skipped: 0
-    }
-  )
-}
-
-export async function uploadQueuedTrainingSamples(limitInput: unknown): Promise<UploadPendingSamplesResult> {
-  const limit = Math.max(1, Math.min(50, toFiniteNumber(limitInput) ?? 12))
-  const uploadEndpoint = getTrainingUploadEndpoint()
-
-  const queuedSamples = (await listTrainingSamples())
-    .filter((sample) => sample.status === "queued" || sample.status === "failed")
-    .slice(0, limit)
-
-  if (queuedSamples.length === 0) {
-    return {
-      ok: true,
-      message: "Tidak ada sample queued/failed yang perlu diupload.",
-      summary: { total: 0, succeeded: 0, failed: 0, skipped: 0 },
-      attempts: []
-    }
-  }
-
-  if (!uploadEndpoint) {
-    const attempts = queuedSamples.map<UploadAttemptResult>((sample) => ({
-      sampleId: sample.id,
-      status: "skipped",
-      message: "ROBOFLOW_TRAINING_UPLOAD_ENDPOINT belum diset.",
-      remoteId: null
-    }))
+  if (!response.ok) {
+    const errorMessage = parseTrainingHttpError(response, payload)
+    await patchTrainingPipelineState({
+      lastStatusAt: new Date().toISOString(),
+      lastStatusResponse: payload,
+      lastError: errorMessage
+    })
 
     return {
       ok: false,
-      message: "Upload endpoint belum dikonfigurasi.",
-      summary: createSummaryFromAttempts(attempts),
-      attempts
+      status: response.status,
+      ready: false,
+      message: errorMessage,
+      response: payload
     }
   }
 
-  const attempts: UploadAttemptResult[] = []
+  const ready = isTrainingReadyPayload(payload)
+  const nextState = await patchTrainingPipelineState({
+    lastStatusAt: new Date().toISOString(),
+    lastStatusResponse: payload,
+    trainingReady: ready,
+    lastError: null
+  })
 
-  for (const sample of queuedSamples) {
-    await patchTrainingSample(sample.id, {
-      status: "uploading",
-      lastError: null
-    })
+  const deployResult = await tryAutoDeployIfReady(nextState)
 
-    try {
-      const uploaded = await uploadSampleViaEndpoint(sample)
-      await patchTrainingSample(sample.id, {
-        status: "uploaded",
-        uploadedAt: new Date().toISOString(),
-        lastError: null,
-        remoteId: uploaded.remoteId,
-        uploadAttempts: sample.uploadAttempts + 1
-      })
-
-      attempts.push({
-        sampleId: sample.id,
-        status: "uploaded",
-        message: "Upload berhasil.",
-        remoteId: uploaded.remoteId
-      })
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error && error.message.trim().length > 0
-          ? error.message
-          : "Upload sample ke Roboflow gagal."
-
-      await patchTrainingSample(sample.id, {
-        status: "failed",
-        lastError: errorMessage,
-        uploadAttempts: sample.uploadAttempts + 1
-      })
-
-      attempts.push({
-        sampleId: sample.id,
-        status: "failed",
-        message: errorMessage,
-        remoteId: null
-      })
-    }
-  }
-
-  const summary = createSummaryFromAttempts(attempts)
   return {
-    ok: summary.failed === 0,
-    message:
-      summary.failed === 0
-        ? `Upload selesai. ${summary.succeeded} sample berhasil diproses.`
-        : `Upload selesai dengan error. Berhasil ${summary.succeeded}, gagal ${summary.failed}.`,
-    summary,
-    attempts
+    ok: true,
+    status: response.status,
+    ready,
+    message: deployResult?.ok
+      ? `Status training ready. Deploy otomatis berhasil dipicu untuk versi ${state.pendingVersion}.`
+      : ready
+        ? `Status training ready untuk versi ${state.pendingVersion}.`
+        : `Training versi ${state.pendingVersion} masih diproses.`,
+    response: {
+      status: payload,
+      autoDeploy: deployResult
+    }
   }
 }
 
@@ -319,6 +163,19 @@ export async function triggerRoboflowTraining(): Promise<TriggerTrainingResult> 
       status: 0,
       message: "ROBOFLOW_TRAINING_TRIGGER_ENDPOINT belum dikonfigurasi.",
       response: null
+    }
+  }
+
+  const samples = await listTrainingSamples()
+  const uploadedCount = samples.filter((sample) => sample.status === "uploaded").length
+  const policy = buildTrainingTriggerPolicy(uploadedCount)
+
+  if (!policy.canTriggerTraining) {
+    return {
+      ok: false,
+      status: 400,
+      message: `Training belum boleh dijalankan. Upload minimal ${policy.minUploadedSamples} sample dulu. Saat ini baru ${policy.uploadedCount} sample uploaded.`,
+      response: policy
     }
   }
 
@@ -351,18 +208,49 @@ export async function triggerRoboflowTraining(): Promise<TriggerTrainingResult> 
 
     const parsedPayload = await parseResponsePayload(response)
     if (response.ok) {
+      const pendingVersion = extractTrainingVersion(parsedPayload)
+      const trainingReady = isTrainingReadyPayload(parsedPayload)
+      const nextState = await patchTrainingPipelineState({
+        lastTriggerAt: new Date().toISOString(),
+        lastTriggerResponse: parsedPayload,
+        pendingVersion,
+        trainingReady,
+        lastStatusAt: trainingReady ? new Date().toISOString() : null,
+        lastStatusResponse: trainingReady ? parsedPayload : null,
+        lastError: null,
+        lastDeployError: null
+      })
+
+      const deployResult = await tryAutoDeployIfReady(nextState)
+      const advisory =
+        policy.uploadedCount > policy.recommendedMaxUploadedSamples
+          ? ` Uploaded sample sudah ${policy.uploadedCount}, melebihi rekomendasi ${policy.recommendedMaxUploadedSamples}.`
+          : ""
+
       return {
         ok: true,
         status: response.status,
-        message: "Trigger training berhasil dikirim.",
-        response: parsedPayload
+        message: deployResult?.ok
+          ? `Trigger training berhasil dikirim dan deploy otomatis dipicu.${advisory}`.trim()
+          : `Trigger training berhasil dikirim.${advisory}`.trim(),
+        response: {
+          trigger: parsedPayload,
+          pendingVersion,
+          autoDeploy: deployResult
+        }
       }
     }
 
     latestStatus = response.status
     latestPayload = parsedPayload
-    latestMessage = parseHttpError(response, parsedPayload)
+    latestMessage = parseTrainingHttpError(response, parsedPayload)
   }
+
+  await patchTrainingPipelineState({
+    lastTriggerAt: new Date().toISOString(),
+    lastTriggerResponse: latestPayload,
+    lastError: latestMessage
+  })
 
   return {
     ok: false,
@@ -370,31 +258,4 @@ export async function triggerRoboflowTraining(): Promise<TriggerTrainingResult> 
     message: latestMessage,
     response: latestPayload
   }
-}
-
-export function getTrainingPipelineConfigState(): {
-  uploadEndpointConfigured: boolean
-  triggerEndpointConfigured: boolean
-  apiKeyConfigured: boolean
-} {
-  return {
-    uploadEndpointConfigured: Boolean(getTrainingUploadEndpoint()),
-    triggerEndpointConfigured: Boolean(getTrainingTriggerEndpoint()),
-    apiKeyConfigured: Boolean(getRoboflowApiKey())
-  }
-}
-
-export function countSamplesByStatus(samples: TrainingSample[]): Record<TrainingSampleStatus, number> {
-  return samples.reduce<Record<TrainingSampleStatus, number>>(
-    (accumulator, sample) => {
-      accumulator[sample.status] += 1
-      return accumulator
-    },
-    {
-      queued: 0,
-      uploading: 0,
-      uploaded: 0,
-      failed: 0
-    }
-  )
 }

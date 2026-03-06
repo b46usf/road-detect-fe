@@ -7,6 +7,7 @@ import {
   ROADSTER_LOGO_PATH,
   ROADSTER_NAME
 } from "@/lib/app-brand"
+import type { InferenceRuntimeState } from "@/lib/inference-runtime-state"
 import { formatPercent } from "@/lib/ui-utils"
 
 export interface DashboardSummaryStats {
@@ -20,13 +21,21 @@ interface DashboardHeaderProps {
   username: string | null | undefined
   stats: DashboardSummaryStats
   rfStats: { invalidCount: number; lastInvalidAt?: number } | null
+  inferenceRuntime: InferenceRuntimeState | null
   onRefresh: () => void
   onClearHistory: () => void
   onLogout: () => void
 }
 
 export default function DashboardHeader(props: DashboardHeaderProps) {
-  const { username, stats, rfStats, onRefresh, onClearHistory, onLogout } = props
+  const { username, stats, rfStats, inferenceRuntime, onRefresh, onClearHistory, onLogout } = props
+  const runtimeHealth = inferenceRuntime?.health ?? null
+  const runtimeTone =
+    inferenceRuntime?.target === "dedicated"
+      ? runtimeHealth?.reachable
+        ? "text-emerald-200"
+        : "text-amber-200"
+      : "text-cyan-100"
 
   return (
     <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
@@ -112,6 +121,20 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
           <p className="mt-1 text-xs text-slate-400">
             Last: {rfStats?.lastInvalidAt ? new Date(rfStats.lastInvalidAt).toLocaleString("id-ID") : "-"}
           </p>
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Inference Mode</p>
+            <p className={`mt-1 text-sm font-semibold ${runtimeTone}`}>
+              {inferenceRuntime?.target === "dedicated" ? "Dedicated" : "Serverless"}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Health:{" "}
+              {runtimeHealth
+                ? runtimeHealth.reachable
+                  ? `Online${runtimeHealth.latencyMs !== null ? ` (${runtimeHealth.latencyMs} ms)` : ""}`
+                  : "Offline"
+                : "Unchecked"}
+            </p>
+          </div>
         </article>
       </div>
     </header>

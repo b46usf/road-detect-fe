@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { readString, toFiniteNumber } from "@/lib/common-utils"
 import {
+  checkRoboflowDedicatedDeploymentStatus,
+  deployRoboflowModel,
   getTrainingPipelineConfigState,
+  setTrainingInferenceTarget,
+  syncRoboflowTrainingStatus,
   triggerRoboflowTraining,
   uploadQueuedTrainingSamples
 } from "@/lib/server/roboflow-training"
@@ -69,6 +73,69 @@ export async function POST(request: Request) {
         ok: result.ok,
         message: result.message,
         status: result.status,
+        response: result.response,
+        config: getTrainingPipelineConfigState()
+      },
+      {
+        status: result.ok ? 200 : 400
+      }
+    )
+  }
+
+  if (action === "sync_training_status") {
+    const result = await syncRoboflowTrainingStatus()
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        message: result.message,
+        ready: result.ready,
+        response: result.response,
+        config: getTrainingPipelineConfigState()
+      },
+      {
+        status: result.ok ? 200 : 400
+      }
+    )
+  }
+
+  if (action === "set_inference_target") {
+    const target = readString(payload.target, "serverless")
+    const result = await setTrainingInferenceTarget(target)
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        message: result.message,
+        pipelineState: result.state,
+        config: getTrainingPipelineConfigState()
+      },
+      {
+        status: result.status
+      }
+    )
+  }
+
+  if (action === "check_deployment_status") {
+    const result = await checkRoboflowDedicatedDeploymentStatus()
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        message: result.message,
+        response: result.response,
+        config: getTrainingPipelineConfigState()
+      },
+      {
+        status: result.ok ? 200 : 400
+      }
+    )
+  }
+
+  if (action === "resume_deployment") {
+    const version = readString(payload.version)
+    const result = await deployRoboflowModel(version || null)
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        message: result.message,
         response: result.response,
         config: getTrainingPipelineConfigState()
       },

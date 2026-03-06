@@ -1,3 +1,5 @@
+import type { TrainingAnnotation } from "@/lib/training-types"
+
 export type StoredSeverityLevel = "ringan" | "sedang" | "berat" | "tidak-terdeteksi"
 export type GisCrs = "EPSG:3857" | "EPSG:4326"
 
@@ -69,6 +71,7 @@ export interface StoredDetectionRecord {
   } | null
   waktuDeteksi: string
   visualBukti: {
+    imageDataUrl: string | null
     mime: string
     quality: number | null
     captureWidth: number | null
@@ -77,6 +80,12 @@ export interface StoredDetectionRecord {
     sourceHeight: number | null
     isFhdSource: boolean | null
   }
+  trainingCandidate: {
+    imageDataUrl: string | null
+    imageWidth: number | null
+    imageHeight: number | null
+    annotations: TrainingAnnotation[]
+  } | null
   spatial: DetectionSpatialRecord | null
 }
 

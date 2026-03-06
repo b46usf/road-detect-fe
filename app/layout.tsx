@@ -1,28 +1,14 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
 import {
   ROADSTER_APP_DESCRIPTION,
   ROADSTER_LOGO_PATH,
   ROADSTER_NAME
 } from "@/lib/app-brand"
+import { getClientAppUrl } from "@/lib/env/client"
 import "./globals.css"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"]
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"]
-})
-
 const metadataBaseUrl = (() => {
-  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!rawAppUrl) {
-    return new URL("http://localhost:3000")
-  }
-
+  const rawAppUrl = getClientAppUrl()
   try {
     return new URL(rawAppUrl)
   } catch {
@@ -64,11 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   )
 }

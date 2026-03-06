@@ -12,11 +12,12 @@ import type { TrainingSample } from "@/lib/training-types"
 interface TrainingSamplesPanelProps {
   samples: TrainingSample[]
   deletingId: string | null
+  onEditAnnotations: (sample: TrainingSample) => Promise<void>
   onDelete: (sampleId: string) => Promise<void>
 }
 
 export default function TrainingSamplesPanel(props: TrainingSamplesPanelProps) {
-  const { samples, deletingId, onDelete } = props
+  const { samples, deletingId, onDelete, onEditAnnotations } = props
 
   const columns = useMemo<AdaptiveDataColumn<TrainingSample>[]>(
     () => [
@@ -82,6 +83,19 @@ export default function TrainingSamplesPanel(props: TrainingSamplesPanelProps) {
         desktopCellClassName: "max-w-xs"
       },
       {
+        id: "annotations",
+        header: "Anotasi",
+        searchValue: (row) => row.annotations.map((item) => item.label).join(" "),
+        desktopCell: (row) => (
+          <div>
+            <p>{row.annotations.length} box</p>
+            <p className="text-[11px] text-slate-400">
+              {row.imageWidth}x{row.imageHeight}px
+            </p>
+          </div>
+        )
+      },
+      {
         id: "timestamp",
         header: "Timestamp",
         searchValue: (row) => `${row.createdAt} ${row.uploadedAt ?? ""}`,
@@ -106,21 +120,33 @@ export default function TrainingSamplesPanel(props: TrainingSamplesPanelProps) {
         id: "action",
         header: "Aksi",
         desktopCell: (row) => (
-          <button
-            type="button"
-            disabled={deletingId === row.id}
-            onClick={(event) => {
-              event.stopPropagation()
-              void onDelete(row.id)
-            }}
-            className="rounded-lg border border-rose-300/40 bg-rose-400/15 px-3 py-1.5 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-400/25 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {deletingId === row.id ? "Menghapus..." : "Hapus"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                void onEditAnnotations(row)
+              }}
+              className="rounded-lg border border-cyan-300/40 bg-cyan-400/15 px-3 py-1.5 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/25"
+            >
+              Edit BBox
+            </button>
+            <button
+              type="button"
+              disabled={deletingId === row.id}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onDelete(row.id)
+              }}
+              className="rounded-lg border border-rose-300/40 bg-rose-400/15 px-3 py-1.5 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-400/25 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deletingId === row.id ? "Menghapus..." : "Hapus"}
+            </button>
+          </div>
         )
       }
     ],
-    [deletingId, onDelete]
+    [deletingId, onDelete, onEditAnnotations]
   )
 
   return (
