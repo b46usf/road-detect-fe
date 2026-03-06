@@ -7,6 +7,7 @@ ROADSTER (ROAd Damage System TEchnology with AI Recognition) adalah aplikasi Nex
 - Halaman kamera untuk inferensi realtime kerusakan jalan.
 - Endpoint `POST /api/roboflow` untuk meneruskan file gambar ke Roboflow.
 - Dashboard admin untuk riwayat deteksi, statistik API, dan konfigurasi GIS.
+- Modul admin training untuk kurasi sample, upload dataset, dan trigger training pipeline.
 - Penyimpanan lokal (localStorage) untuk history/metrics di sisi client.
 - Sinkronisasi statistik admin via script dan GitHub Actions berkala.
 
@@ -16,6 +17,7 @@ ROADSTER (ROAd Damage System TEchnology with AI Recognition) adalah aplikasi Nex
 - `/camera` mode kamera dan inferensi.
 - `/admin/login` autentikasi admin.
 - `/admin/dashboard` monitoring deteksi + GIS.
+- `/admin/training` kurasi sample training + pipeline Roboflow.
 
 ## Branding Single Source of Truth
 
@@ -73,6 +75,8 @@ npm run start
 - `ROBOFLOW_ENDPOINT_SECRET` : secret header `x-roboflow-endpoint-secret` untuk endpoint admin/server.
 - `SYNC_ROBOFLOW_ENDPOINT` : endpoint tujuan sinkronisasi dari Actions.
 - `SYNC_ROBOFLOW_SECRET` : legacy fallback (deprecated), gunakan `ROBOFLOW_ENDPOINT_SECRET`.
+- `ROBOFLOW_TRAINING_UPLOAD_ENDPOINT` : endpoint upload dataset/sample training Roboflow.
+- `ROBOFLOW_TRAINING_TRIGGER_ENDPOINT` : endpoint trigger proses training Roboflow.
 
 ## Setup Secrets (Langkah Ringkas)
 

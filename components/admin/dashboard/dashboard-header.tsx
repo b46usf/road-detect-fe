@@ -1,3 +1,4 @@
+import Link from "next/link"
 import Image from "next/image"
 import {
   ROADSTER_ADMIN_DESCRIPTION,
@@ -56,6 +57,12 @@ export default function DashboardHeader(props: DashboardHeaderProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/training"
+            className="rounded-lg border border-cyan-300/40 bg-cyan-400/15 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25"
+          >
+            Modul Training
+          </Link>
           <button
             type="button"
             onClick={onRefresh}

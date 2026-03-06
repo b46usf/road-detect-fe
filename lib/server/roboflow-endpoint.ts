@@ -2,7 +2,7 @@ import { readString } from "@/lib/common-utils"
 import { buildRoboflowPath } from "@/lib/server/roboflow-model-path"
 
 export const DEFAULT_ROBOFLOW_SERVERLESS_ENDPOINT =
-  "https://serverless.roboflow.com/baguss-workspace/find-barriers-potholes-waters-crackings-ruttings-and-roads"
+  "https://serverless.roboflow.com/baguss-workspace/workflows/detect-count-and-visualize"
 
 interface ResolveRoboflowEndpointParams {
   apiKey: string
