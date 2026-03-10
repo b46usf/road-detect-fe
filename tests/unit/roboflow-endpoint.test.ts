@@ -7,7 +7,7 @@ describe("roboflow endpoint resolution", () => {
       apiKey: "secret-key",
       modelId: "road-damage-ai",
       modelVersion: "9",
-      confidence: "0.4",
+      confidence: "0.2",
       overlap: "0.3",
       endpointBaseOverride: "https://roadster-prod-abc.roboflow.cloud"
     })
@@ -23,7 +23,7 @@ describe("roboflow endpoint resolution", () => {
       apiKey: "secret-key",
       modelId: "road-damage-ai",
       modelVersion: "2",
-      confidence: "0.4",
+      confidence: "0.2",
       overlap: "0.3",
       endpointBaseOverride: "http://gpubabesugab:9001/road-damage-ai/2"
     })
